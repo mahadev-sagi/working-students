@@ -1,5 +1,7 @@
+
 #include "db.h"
 #include <libpq-fe.h>
+#include <string>
 #include <cstdlib>
 #include <stdexcept>
 
@@ -35,6 +37,18 @@ std::optional<UserRow> DB::findUserByEmail(const std::string& email) {
     PQclear(res);
 
     return row;
+}
+
+bool DB::setUserPassword(const std::string& email, const std::string& password_hash) {
+    if (!g_conn) return false;
+    const char* paramValues[2] = {password_hash.c_str(), email.c_str()};
+    PGresult* res = PQexecParams(g_conn,
+        "UPDATE students SET password_hash=$1 WHERE email=$2",
+        2, nullptr, paramValues, nullptr, nullptr, 0);
+    if (!res) return false;
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    PQclear(res);
+    return ok;
 }
 
 std::optional<UserRow> DB::findUserById(int id) {

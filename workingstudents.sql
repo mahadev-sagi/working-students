@@ -17,11 +17,14 @@ CREATE TABLE students (
     id SERIAL PRIMARY KEY,
     name TEXT,
     email TEXT UNIQUE,
-    password_hash TEXT
+    password_hash TEXT DEFAULT NULL -- can be NULL for students created by admin without setting password
 );
+
 INSERT INTO students (name, email, password_hash)
 VALUES
-('test', 'test@example.com', '$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi');  -- password is 'Test123' hashed with bcrypt
+('test', 'test@example.com', '$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi'),  -- password is 'Test123' hashed with bcrypt
+('new_user', 'new_user@example.com', NULL); -- example of student created by admin without setting password, can be updated later when student sets password
+
 
 -- ADMIN USERS
 
