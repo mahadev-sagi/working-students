@@ -1,3 +1,4 @@
+CREATE DATABASE workingstudents;
 
 DROP TABLE IF EXISTS events CASCADE;
 DROP TABLE IF EXISTS student_assignments CASCADE;
