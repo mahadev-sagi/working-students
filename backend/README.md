@@ -1,18 +1,52 @@
-To start setting up, use homebrew installation manager
 
-run "brew install pistache" 
+# Authentication API Test Instructions
 
-then compile the server.cpp file and see if it works using this command. 
+To test the authentication endpoints with the provided test user, follow these steps:
 
-g++ server.cpp -std=c++17 -lpistache -pthread
+## 1. Build and start the server
 
-or run this to keep executable in build folder
+In the backend directory, use the provided Makefile to build the server:
 
-g++ src/server.cpp -std=c++17 -lpistache -pthread -o build/server
+```bash
+make
+./build/server
+```
 
+If you encounter missing dependencies, install them using your system's package manager (see Makefile for details and paths).
 
-then run server using either "./server" or "./build/server" depending on the command you use
+## 2. Test /login endpoint
 
-open this address to verify that "hello, world " has appeared, this is the server address
+```bash
+curl -X POST http://localhost:9080/login \
+   -H "Content-Type: application/json" \
+   -d '{"email":"test@example.com","password":"Test123"}'
+```
 
-http://localhost:9080
+This will return a JSON object with a `token` field.
+
+## 3. Test /me endpoint
+
+Copy the token from the previous step and use it in the following command (replace TOKEN with your actual token):
+
+```bash
+curl -X GET http://localhost:9080/me \
+   -H "Authorization: Bearer TOKEN"
+```
+
+You should receive a JSON response with the test user's email and id.
+
+# Backend setup
+
+## Prerequisites
+
+- Homebrew
+- PostgreSQL running with database `productivity_app`
+- `pistache`, `libpq`, `nlohmann-json`, `jwt-cpp`, `bcrypt`
+
+Install libs:
+```bash
+brew install pistache
+brew install postgresql
+brew install nlohmann-json
+```
+(install `jwt-cpp` + `bcrypt` via your package manager or submodule)

@@ -17,8 +17,11 @@ CREATE TABLE students (
     id SERIAL PRIMARY KEY,
     name TEXT,
     email TEXT UNIQUE,
-    password_hash TEXT,
+    password_hash TEXT
 );
+INSERT INTO students (name, email, password_hash)
+VALUES
+('test', 'test@example.com', '$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi');  -- password is 'Test123' hashed with bcrypt
 
 -- ADMIN USERS
 
@@ -26,7 +29,7 @@ CREATE TABLE admin_users (
     id SERIAL PRIMARY KEY,
     name TEXT,
     email TEXT UNIQUE,
-    password_hash TEXT NOT NULL,
+    password_hash TEXT NOT NULL
 );
 -- CLASSES
 
@@ -34,7 +37,7 @@ CREATE TABLE classes (
     id SERIAL PRIMARY KEY,
     class_name TEXT NOT NULL,
     course_code TEXT,
-    instructor TEXT REFERENCES admin_users(name) ON DELETE SET NULL, -- if instructor deleted, set to NULL
+    instructor_id INTEGER REFERENCES admin_users(id) ON DELETE SET NULL, -- if instructor deleted, set to NULL
     building TEXT,
     room_number TEXT,
     start_time TIME,
@@ -51,7 +54,7 @@ CREATE TABLE shifts (
     start_time TIME,
     end_time TIME,
     day_of_week TEXT, -- need to decide format (e.g., 'M', 'Mon.', 'Monday')
-    location TEXT
+    location TEXT,
     recurring BOOLEAN DEFAULT FALSE -- if true, shift occurs every week on the specified day
 );
 
@@ -88,17 +91,18 @@ CREATE TABLE assignments (
     id SERIAL PRIMARY KEY,
     class_id INTEGER REFERENCES classes(id) ON DELETE CASCADE, -- can be used to find all assignments for given class
     assignment_type_id INTEGER REFERENCES assignment_types(id),
-    assignment_time_prediction INTEGER DEFAULT REFERENCES assignment_types(avg_completion_hours), 
-    -- default to saved time prediction for that assignment type, ^^^^^^^^^^^^^^^^^^
+    assignment_time_avg INTEGER REFERENCES assignment_types(avg_completion_hours),
+    assignment_time_prediction INTEGER DEFAULT 0, 
+    -- default to 0, if still 0 reference avg time prediction for that assignment type, 
     -- perhaps admin account can provide a more accurate prediction at the time they 
-    -- enter a new assignment into the system
+    -- enter a new assignment into the system, which will update this to a value other than 0
     title TEXT,
     description TEXT DEFAULT '',
     due_time TIME,
-    due_date DATE,
+    due_date DATE
     );
 
 
-SELECT * FROM users;
+SELECT * FROM students;
 SELECT current_database();
 SELECT datname FROM pg_database;
