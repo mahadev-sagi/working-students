@@ -148,6 +148,35 @@ int main() {
       return Pistache::Rest::Route::Result::Ok;
   });
 
+  Pistache::Rest::Routes::Get(router, "/assignment-hours/total", [&](const Rest::Request req, Http::ResponseWriter res) {
+      auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+      if (!authHeader) {
+          res.send(Http::Code::Unauthorized, "Missing Authorization header");
+          return Pistache::Rest::Route::Result::Failure;
+      }
+
+      auto profile = Auth::verifyBearerToken(authHeader->value());
+      if (!profile.success) {
+          res.send(Http::Code::Unauthorized, profile.error);
+          return Pistache::Rest::Route::Result::Failure;
+      }
+
+      int studentId = profile.user.value("id", 0);
+      if (studentId <= 0) {
+          res.send(Http::Code::Bad_Request, "Invalid user profile");
+          return Pistache::Rest::Route::Result::Failure;
+      }
+
+      int totalHours = DB::getTotalAssignmentHoursForStudent(studentId);
+
+      nlohmann::json response = {
+          {"total_assignment_hours", totalHours}
+      };
+
+      res.send(Http::Code::Ok, response.dump(), MIME(Application, Json));
+      return Pistache::Rest::Route::Result::Ok;
+  });
+
   server.setHandler(router.handler());
   server.serve();
   server.shutdown();

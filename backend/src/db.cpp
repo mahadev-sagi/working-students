@@ -4,6 +4,7 @@
 #include <string>
 #include <cstdlib>
 #include <stdexcept>
+#include <vector>
 
 static PGconn* g_conn = nullptr;
 
@@ -49,6 +50,74 @@ bool DB::setUserPassword(const std::string& email, const std::string& password_h
     bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
     PQclear(res);
     return ok;
+}
+
+std::vector<AssignmentHoursByType> DB::getAssignmentHoursByTypeForStudent(int studentId) {
+    std::vector<AssignmentHoursByType> rows;
+    if (!g_conn) return rows;
+
+    std::string studentIdStr = std::to_string(studentId);
+    const char* paramValues[1] = {studentIdStr.c_str()};
+    PGresult* res = PQexecParams(
+        g_conn,
+        "SELECT at.type_name, COUNT(a.id) AS assignment_count, "
+        "COALESCE(SUM(CASE "
+        "WHEN COALESCE(a.assignment_time_prediction, 0) > 0 THEN a.assignment_time_prediction "
+        "WHEN COALESCE(a.assignment_time_avg, 0) > 0 THEN a.assignment_time_avg "
+        "ELSE at.avg_completion_hours END), 0) AS total_hours "
+        "FROM enrollments e "
+        "JOIN assignments a ON a.class_id = e.class_id "
+        "JOIN assignment_types at ON at.id = a.assignment_type_id "
+        "WHERE e.student_id = $1 "
+        "GROUP BY at.type_name "
+        "ORDER BY at.type_name",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (!res) return rows;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return rows;
+    }
+
+    int tupleCount = PQntuples(res);
+    for (int i = 0; i < tupleCount; ++i) {
+        AssignmentHoursByType row;
+        row.assignment_type = PQgetvalue(res, i, 0);
+        row.assignment_count = std::atoi(PQgetvalue(res, i, 1));
+        row.total_hours = std::atoi(PQgetvalue(res, i, 2));
+        rows.push_back(row);
+    }
+
+    PQclear(res);
+    return rows;
+}
+
+int DB::getTotalAssignmentHoursForStudent(int studentId) {
+    if (!g_conn) return 0;
+
+    std::string studentIdStr = std::to_string(studentId);
+    const char* paramValues[1] = {studentIdStr.c_str()};
+    PGresult* res = PQexecParams(
+        g_conn,
+        "SELECT COALESCE(SUM(CASE "
+        "WHEN COALESCE(a.assignment_time_prediction, 0) > 0 THEN a.assignment_time_prediction "
+        "WHEN COALESCE(a.assignment_time_avg, 0) > 0 THEN a.assignment_time_avg "
+        "ELSE at.avg_completion_hours END), 0) AS total_hours "
+        "FROM enrollments e "
+        "JOIN assignments a ON a.class_id = e.class_id "
+        "JOIN assignment_types at ON at.id = a.assignment_type_id "
+        "WHERE e.student_id = $1",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (!res) return 0;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1) {
+        PQclear(res);
+        return 0;
+    }
+
+    int totalHours = std::atoi(PQgetvalue(res, 0, 0));
+    PQclear(res);
+    return totalHours;
 }
 
 std::optional<UserRow> DB::findUserById(int id) {
