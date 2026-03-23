@@ -1,1 +1,5 @@
-backend/build/
+/build/
+/vendor/
+Makefile
+.DS_Store
+.vscode/

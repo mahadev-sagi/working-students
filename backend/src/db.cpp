@@ -40,6 +40,28 @@ std::optional<UserRow> DB::findUserByEmail(const std::string& email) {
     return row;
 }
 
+std::optional<UserRow> DB::createUser(const std::string& email, const std::string& password_hash) {
+    if (!g_conn) return std::nullopt;
+
+    const char* paramValues[2] = {email.c_str(), password_hash.c_str()};
+    PGresult* res = PQexecParams(g_conn,
+        "INSERT INTO students (email, password_hash) VALUES ($1, $2) RETURNING id, email, password_hash",
+        2, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (!res || PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1) {
+        if (res) PQclear(res);
+        return std::nullopt;
+    }
+
+    UserRow row;
+    row.id = std::atoi(PQgetvalue(res, 0, 0));
+    row.email = PQgetvalue(res, 0, 1);
+    row.password_hash = PQgetvalue(res, 0, 2);
+    PQclear(res);
+
+    return row;
+}
+
 bool DB::setUserPassword(const std::string& email, const std::string& password_hash) {
     if (!g_conn) return false;
     const char* paramValues[2] = {password_hash.c_str(), email.c_str()};

@@ -21,24 +21,27 @@ POSTGRES_LIBS := $(shell pkg-config --libs libpq 2>/dev/null)
 
 # Fallbacks for Homebrew (macOS)
 ifeq ($(PISTACHE_CFLAGS),)
-PISTACHE_CFLAGS = -I/opt/homebrew/include -I/opt/homebrew/Cellar/pistache/0.4.26/include
-PISTACHE_LIBS = -L/opt/homebrew/lib -lpistache
+PISTACHE_CFLAGS = -I/usr/local/opt/pistache/include
+PISTACHE_LIBS = -L/usr/local/opt/pistache/lib -lpistache
 endif
 ifeq ($(NLOHMANN_CFLAGS),)
-NLOHMANN_CFLAGS = -I/opt/homebrew/Cellar/nlohmann-json/3.12.0/include
+NLOHMANN_CFLAGS = -I/usr/local/opt/nlohmann-json/include
 NLOHMANN_LIBS =
 endif
 ifeq ($(POSTGRES_CFLAGS),)
-POSTGRES_CFLAGS = -I/opt/homebrew/Cellar/postgresql@18/18.3/include/postgresql
-POSTGRES_LIBS = -L/opt/homebrew/Cellar/postgresql@18/18.3/lib/postgresql -lpq
+POSTGRES_CFLAGS = -I/usr/local/opt/postgresql@18/include/postgresql
+POSTGRES_LIBS = -L/usr/local/opt/postgresql@18/lib/postgresql -lpq
 endif
 
+# jwt-cpp (header only)
+JWT_CPP_CFLAGS = -Ivendor/jwt-cpp/include
+
 # bcrypt and other libs
-BCRYPT_LIB = /opt/homebrew/lib/bcrypt.a
+BCRYPT_LIB = vendor/bcrypt/bcrypt.a
 EXTRA_LIBS = -lcrypto -lssl -pthread
 
 # Combine all flags
-INCLUDES = $(PISTACHE_CFLAGS) $(NLOHMANN_CFLAGS) $(POSTGRES_CFLAGS)
+INCLUDES = $(PISTACHE_CFLAGS) $(NLOHMANN_CFLAGS) $(POSTGRES_CFLAGS) $(JWT_CPP_CFLAGS) -Ivendor/bcrypt
 LIBS = $(PISTACHE_LIBS) $(NLOHMANN_LIBS) $(POSTGRES_LIBS) $(BCRYPT_LIB) $(EXTRA_LIBS)
 
 all: $(TARGET)
