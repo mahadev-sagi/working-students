@@ -22,8 +22,8 @@ CREATE TABLE students (
 
 INSERT INTO students (name, email, password_hash)
 VALUES
-('test', 'test@example.com', '$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi'),  -- password is 'Test123' hashed with bcrypt
-('new_user', 'new_user@example.com', NULL); -- example of student created by admin without setting password, can be updated later when student sets password
+('test', 'test@ufl.edu', '$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi'),  -- password is 'Test123' hashed with bcrypt
+('new_user', 'new_user@ufl.edu', NULL); -- example of student created by admin without setting password, can be updated later when student sets password
 
 
 -- ADMIN USERS
@@ -94,7 +94,7 @@ CREATE TABLE assignments (
     id SERIAL PRIMARY KEY,
     class_id INTEGER REFERENCES classes(id) ON DELETE CASCADE, -- can be used to find all assignments for given class
     assignment_type_id INTEGER REFERENCES assignment_types(id),
-    assignment_time_avg INTEGER REFERENCES assignment_types(avg_completion_hours),
+    assignment_time_avg INTEGER,
     assignment_time_prediction INTEGER DEFAULT 0, 
     -- default to 0, if still 0 reference avg time prediction for that assignment type, 
     -- perhaps admin account can provide a more accurate prediction at the time they 
@@ -103,7 +103,7 @@ CREATE TABLE assignments (
     description TEXT DEFAULT '',
     due_time TIME,
     due_date DATE
-    );
+);
 
 
 SELECT * FROM students;

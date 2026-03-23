@@ -131,6 +131,43 @@ int main() {
       return Pistache::Rest::Route::Result::Ok;
   });
 
+  Pistache::Rest::Routes::Post(router, "/signup", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto body = req.body();
+    std::string email = parseJsonField(body, "email");
+    std::string password = parseJsonField(body, "password");
+
+    if (email.empty() || password.empty()) {
+        res.send(Http::Code::Bad_Request, "email and password required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto userOpt = DB::findUserByEmail(email);
+    if (userOpt) {
+        res.send(Http::Code::Conflict, "User already exists");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    char salt[BCRYPT_HASHSIZE];
+    char hash[BCRYPT_HASHSIZE];
+    if (bcrypt_gensalt(12, salt) != 0) {
+        res.send(Http::Code::Internal_Server_Error, "Failed to generate salt");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+    if (bcrypt_hashpw(password.c_str(), salt, hash) != 0) {
+        res.send(Http::Code::Internal_Server_Error, "Failed to hash password");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto newUserOpt = DB::createUser(email, std::string(hash));
+    if (!newUserOpt) {
+        res.send(Http::Code::Internal_Server_Error, "Failed to create user");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    res.send(Http::Code::Ok, "User created successfully");
+    return Pistache::Rest::Route::Result::Ok;
+  });
+
   Pistache::Rest::Routes::Get(router, "/me", [&](const Rest::Request req, Http::ResponseWriter res) {
       auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
       if (!authHeader) {
