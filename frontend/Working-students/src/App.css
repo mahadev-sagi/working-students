@@ -100,8 +100,3 @@ button {
   font-size: 1.1rem;
   font-weight: 700;
 }
-
-.error-message {
-  color: red;
-  margin-top: 10px;
-}
