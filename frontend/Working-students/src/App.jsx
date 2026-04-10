@@ -21,6 +21,7 @@ function App() {
       return;
     }
     setError('');
+    console.log('LOGIN DEBUG:', { email, password });
     try {
       const response = await fetch('/login', {
         method: 'POST',

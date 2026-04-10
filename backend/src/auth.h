@@ -2,7 +2,7 @@
 
 #include <string>
 #include <optional>
-#include <nlohmann/json.hpp>
+
 
 struct AuthResult {
     bool success;
@@ -12,7 +12,7 @@ struct AuthResult {
 
 struct UserProfileResult {
     bool success;
-    nlohmann::json user;
+    std::string user;
     std::string error;
 };
 
