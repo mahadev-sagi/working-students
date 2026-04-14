@@ -54,6 +54,7 @@ EXPOSE 9080
 
 # Add wait-for-db script
 COPY wait-for-db.sh /wait-for-db.sh
+RUN sed -i 's/\r$//' /wait-for-db.sh
 RUN chmod +x /wait-for-db.sh
 
 # Set entrypoint to wait for db before starting server

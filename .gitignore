@@ -1,0 +1,6 @@
+# Machine-local VS Code settings
+.vscode/settings.json
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
