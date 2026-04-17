@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiUrl } from './api';
 import './App.css';
 import HomePage from './HomePage';
 
@@ -23,7 +24,7 @@ function App() {
     setError('');
     console.log('LOGIN DEBUG:', { email, password });
     try {
-      const response = await fetch('/login', {
+      const response = await fetch(apiUrl('/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -57,7 +58,7 @@ function App() {
     }
     setError('');
     try {
-      const signupResponse = await fetch('/signup', {
+      const signupResponse = await fetch(apiUrl('/signup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
