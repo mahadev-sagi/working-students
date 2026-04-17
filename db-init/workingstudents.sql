@@ -105,6 +105,17 @@ CREATE TABLE assignments (
     due_date DATE
 );
 
+-- STUDENT ASSIGNMENT COMPLETIONS (Historical Tracking)
+
+CREATE TABLE student_assignments (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER REFERENCES students(id) ON DELETE CASCADE,
+    assignment_id INTEGER REFERENCES assignments(id) ON DELETE CASCADE,
+    actual_completion_hours NUMERIC(6,2) NOT NULL,
+    completed_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(student_id, assignment_id)
+);
+
 
 SELECT * FROM students;
 SELECT current_database();

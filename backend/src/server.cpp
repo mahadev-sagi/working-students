@@ -26,7 +26,23 @@ static std::string parseJsonField(const std::string& body, const std::string& ke
 
 int main() {
   constexpr int port = 9080;
-    const char* conninfo = "dbname=workingstudents user=ws_app password=changeme host=db port=5432";
+  const char* db_host    = std::getenv("DB_HOST")     ? std::getenv("DB_HOST")     : "db";
+const char* db_port    = std::getenv("DB_PORT")     ? std::getenv("DB_PORT")     : "5432";
+const char* db_name    = std::getenv("DB_NAME")     ? std::getenv("DB_NAME")     : "workingstudents";
+const char* db_user    = std::getenv("DB_USER")     ? std::getenv("DB_USER")     : "ws_app";
+const char* db_pass    = std::getenv("DB_PASSWORD") ? std::getenv("DB_PASSWORD") : "changeme";
+const char* db_sslmode = std::getenv("DB_SSLMODE")  ? std::getenv("DB_SSLMODE")  : "prefer";
+
+std::string conninfo =
+    "host=" + std::string(db_host) +
+    " port=" + std::string(db_port) +
+    " dbname=" + std::string(db_name) +
+    " user=" + std::string(db_user) +
+    " password=" + std::string(db_pass) +
+    " sslmode=" + std::string(db_sslmode);
+
+fprintf(stderr, "Connecting to database at %s:%s/%s (ssl=%s)...\n",
+        db_host, db_port, db_name, db_sslmode);
 
   if (!DB::init(conninfo)) {
       fprintf(stderr, "ERROR: Failed to connect to database\n");
@@ -121,7 +137,11 @@ int main() {
               // Pass the actual request body to Auth::loginFromJson
               auto result = Auth::loginFromJson(body);
               if (!result.success) {
-                  res.send(Http::Code::Unauthorized, result.error);
+                  if (result.error.rfind("Internal server error", 0) == 0) {
+                      res.send(Http::Code::Internal_Server_Error, result.error);
+                  } else {
+                      res.send(Http::Code::Unauthorized, result.error);
+                  }
                   return Pistache::Rest::Route::Result::Failure;
               }
               std::string response = std::string("{\"token\":\"") + result.token + "\"}";
@@ -180,6 +200,183 @@ int main() {
       return Pistache::Rest::Route::Result::Ok;
   });
 
+
+  // ==================== SIGNUP ====================
+Pistache::Rest::Routes::Post(router, "/signup", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto body = req.body();
+    std::string email = parseJsonField(body, "email");
+    std::string password = parseJsonField(body, "password");
+
+    if (email.empty() || password.empty()) {
+        res.send(Http::Code::Bad_Request, "email and password required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto existing = DB::findUserByEmail(email);
+    if (existing) {
+        res.send(Http::Code::Conflict, "User already exists");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    char salt[BCRYPT_HASHSIZE];
+    char hash[BCRYPT_HASHSIZE];
+    if (bcrypt_gensalt(12, salt) != 0) {
+        res.send(Http::Code::Internal_Server_Error, "Failed to generate salt");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+    if (bcrypt_hashpw(password.c_str(), salt, hash) != 0) {
+        res.send(Http::Code::Internal_Server_Error, "Failed to hash password");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    if (!DB::createUser(email, std::string(hash))) {
+        res.send(Http::Code::Internal_Server_Error, "Failed to create user");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    res.send(Http::Code::Ok, R"({"message":"Signup successful"})", MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
+// ==================== RECORD COMPLETION ====================
+Pistache::Rest::Routes::Post(router, "/assignments/complete", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+    if (!authHeader) {
+        res.send(Http::Code::Unauthorized, "Missing Authorization header");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+    auto profile = Auth::verifyBearerToken(authHeader->value());
+    if (!profile.success) {
+        res.send(Http::Code::Unauthorized, profile.error);
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int studentId = 0;
+    size_t idPos = profile.user.find("\"id\"");
+    if (idPos != std::string::npos) {
+        size_t colon = profile.user.find(':', idPos);
+        size_t comma = profile.user.find(',', colon);
+        studentId = std::stoi(profile.user.substr(colon + 1, comma - colon - 1));
+    }
+    if (studentId <= 0) {
+        res.send(Http::Code::Bad_Request, "Invalid user profile");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto body = req.body();
+    picojson::value v;
+    std::string err = picojson::parse(v, body);
+    if (!err.empty() || !v.is<picojson::object>()) {
+        res.send(Http::Code::Bad_Request, "Invalid JSON");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+    const auto& obj = v.get<picojson::object>();
+
+    auto aidIt = obj.find("assignment_id");
+    auto hoursIt = obj.find("actual_hours");
+    if (aidIt == obj.end() || !aidIt->second.is<double>() ||
+        hoursIt == obj.end() || !hoursIt->second.is<double>()) {
+        res.send(Http::Code::Bad_Request, "assignment_id and actual_hours required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int assignmentId = (int)aidIt->second.get<double>();
+    double actualHours = hoursIt->second.get<double>();
+
+    if (!DB::recordAssignmentCompletion(studentId, assignmentId, actualHours)) {
+        res.send(Http::Code::Internal_Server_Error, "Failed to record completion");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    res.send(Http::Code::Ok, R"({"message":"Completion recorded"})", MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
+// ==================== GET COMPLETION HISTORY ====================
+Pistache::Rest::Routes::Get(router, "/assignments/history", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+    if (!authHeader) {
+        res.send(Http::Code::Unauthorized, "Missing Authorization header");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+    auto profile = Auth::verifyBearerToken(authHeader->value());
+    if (!profile.success) {
+        res.send(Http::Code::Unauthorized, profile.error);
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int studentId = 0;
+    size_t idPos = profile.user.find("\"id\"");
+    if (idPos != std::string::npos) {
+        size_t colon = profile.user.find(':', idPos);
+        size_t comma = profile.user.find(',', colon);
+        studentId = std::stoi(profile.user.substr(colon + 1, comma - colon - 1));
+    }
+    if (studentId <= 0) {
+        res.send(Http::Code::Bad_Request, "Invalid user profile");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto records = DB::getCompletionHistory(studentId);
+
+    picojson::array arr;
+    for (const auto& rec : records) {
+        picojson::object o;
+        o["id"] = picojson::value((double)rec.id);
+        o["assignment_id"] = picojson::value((double)rec.assignment_id);
+        o["title"] = picojson::value(rec.assignment_title);
+        o["type"] = picojson::value(rec.assignment_type);
+        o["actual_hours"] = picojson::value(rec.actual_hours);
+        o["completed_at"] = picojson::value(rec.completed_at);
+        arr.push_back(picojson::value(o));
+    }
+    std::string response = picojson::value(arr).serialize();
+    res.send(Http::Code::Ok, response, MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
+// ==================== GET ASSIGNMENTS WITH SMART PREDICTIONS ====================
+Pistache::Rest::Routes::Get(router, "/assignments", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+    if (!authHeader) {
+        res.send(Http::Code::Unauthorized, "Missing Authorization header");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+    auto profile = Auth::verifyBearerToken(authHeader->value());
+    if (!profile.success) {
+        res.send(Http::Code::Unauthorized, profile.error);
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int studentId = 0;
+    size_t idPos = profile.user.find("\"id\"");
+    if (idPos != std::string::npos) {
+        size_t colon = profile.user.find(':', idPos);
+        size_t comma = profile.user.find(',', colon);
+        studentId = std::stoi(profile.user.substr(colon + 1, comma - colon - 1));
+    }
+    if (studentId <= 0) {
+        res.send(Http::Code::Bad_Request, "Invalid user profile");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto assignments = DB::getAssignmentsForStudent(studentId);
+
+    picojson::array arr;
+    for (const auto& a : assignments) {
+        picojson::object o;
+        o["assignment_id"] = picojson::value((double)a.assignment_id);
+        o["title"] = picojson::value(a.title);
+        o["type"] = picojson::value(a.type_name);
+        o["predicted_hours"] = picojson::value((double)a.predicted_hours);
+        o["due_date"] = picojson::value(a.due_date);
+        o["completed"] = picojson::value(a.completed);
+        arr.push_back(picojson::value(o));
+    }
+    std::string response = picojson::value(arr).serialize();
+    res.send(Http::Code::Ok, response, MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
   server.setHandler(router.handler());
   server.serve();
   server.shutdown();
@@ -188,4 +385,3 @@ int main() {
 
   return 0;
 }
-

@@ -1,16 +1,12 @@
-# Frontend Dockerfile for React app
-FROM node:20-alpine
-
+FROM node:20-alpine AS build
 WORKDIR /app
-COPY . /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
 
-# Install dependencies and build
-RUN npm install && npm run build
-
-# Use a lightweight web server to serve static files
 FROM nginx:alpine
-COPY --from=0 /app/dist /usr/share/nginx/html
-# Copy custom nginx config for API proxying
+COPY --from=build /app/dist /usr/share/nginx/html
 COPY default.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
