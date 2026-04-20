@@ -5,6 +5,7 @@
 #include "auth.h"
 #include "db.h"
 #include <picojson/picojson.h>
+#include <cctype>
 
 using namespace Pistache;
 using namespace Pistache::Rest;
@@ -24,6 +25,58 @@ static std::string parseJsonField(const std::string& body, const std::string& ke
 static void addCorsHeaders(Http::ResponseWriter& res) {
     res.headers()
         .add<Http::Header::AccessControlAllowOrigin>("https://working-students.vercel.app");
+}
+
+static bool parseJsonObject(const std::string& body, picojson::object& outObj) {
+    picojson::value v;
+    std::string err = picojson::parse(v, body);
+    if (!err.empty() || !v.is<picojson::object>()) return false;
+    outObj = v.get<picojson::object>();
+    return true;
+}
+
+static std::string trimString(const std::string& input) {
+    size_t start = 0;
+    while (start < input.size() && std::isspace(static_cast<unsigned char>(input[start]))) {
+        start++;
+    }
+    size_t end = input.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(input[end - 1]))) {
+        end--;
+    }
+    return input.substr(start, end - start);
+}
+
+static std::vector<std::string> parseStringArrayField(const picojson::object& obj, const std::string& key) {
+    std::vector<std::string> values;
+    auto it = obj.find(key);
+    if (it == obj.end() || !it->second.is<picojson::array>()) return values;
+
+    const auto& arr = it->second.get<picojson::array>();
+    for (const auto& v : arr) {
+        if (!v.is<std::string>()) continue;
+        auto trimmed = trimString(v.get<std::string>());
+        if (!trimmed.empty()) values.push_back(trimmed);
+    }
+    return values;
+}
+
+static bool extractIdAndRoleFromProfileJson(const std::string& profileJson, int& id, std::string& role) {
+    picojson::value v;
+    std::string err = picojson::parse(v, profileJson);
+    if (!err.empty() || !v.is<picojson::object>()) return false;
+
+    const auto& obj = v.get<picojson::object>();
+    auto idIt = obj.find("id");
+    auto roleIt = obj.find("role");
+    if (idIt == obj.end() || !idIt->second.is<double>() ||
+        roleIt == obj.end() || !roleIt->second.is<std::string>()) {
+        return false;
+    }
+
+    id = static_cast<int>(idIt->second.get<double>());
+    role = roleIt->second.get<std::string>();
+    return id > 0;
 }
 
 
@@ -52,9 +105,10 @@ int main() {
         return 1;
     }
 
-    Http::Endpoint server(Address(Ipv4::any(), Port(port)));
-    auto opts = Http::Endpoint::options().threads(2);
-    server.init(opts);
+  Http::Endpoint server(Address(Ipv4::any(), Port(port)));
+    // DB layer currently uses a shared global PG connection; keep single-threaded server access.
+    auto opts = Http::Endpoint::options().threads(1);
+  server.init(opts);
 
     Rest::Router router;
 
@@ -456,6 +510,508 @@ int main() {
         res.send(Http::Code::Ok, response, MIME(Application, Json));
         return Pistache::Rest::Route::Result::Ok;
     });
+
+// ==================== ADMIN ENDPOINTS ====================
+
+Pistache::Rest::Routes::Get(router, "/admin/assignment-types", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+    if (!authHeader) {
+        res.send(Http::Code::Unauthorized, "Missing Authorization header");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto profile = Auth::verifyBearerToken(authHeader->value());
+    if (!profile.success) {
+        res.send(Http::Code::Unauthorized, profile.error);
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int userId = 0;
+    std::string role;
+    if (!extractIdAndRoleFromProfileJson(profile.user, userId, role) || role != "admin") {
+        res.send(Http::Code::Forbidden, "Admin access required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto assignmentTypes = DB::getAssignmentTypes();
+    picojson::array arr;
+    for (const auto& type : assignmentTypes) {
+        picojson::object o;
+        o["id"] = picojson::value((double)type.id);
+        o["type_name"] = picojson::value(type.type_name);
+        o["avg_completion_hours"] = picojson::value((double)type.avg_completion_hours);
+        arr.push_back(picojson::value(o));
+    }
+
+    res.send(Http::Code::Ok, picojson::value(arr).serialize(), MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
+Pistache::Rest::Routes::Get(router, "/admin/classes", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+    if (!authHeader) {
+        res.send(Http::Code::Unauthorized, "Missing Authorization header");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto profile = Auth::verifyBearerToken(authHeader->value());
+    if (!profile.success) {
+        res.send(Http::Code::Unauthorized, profile.error);
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int adminId = 0;
+    std::string role;
+    if (!extractIdAndRoleFromProfileJson(profile.user, adminId, role) || role != "admin") {
+        res.send(Http::Code::Forbidden, "Admin access required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto classes = DB::getClassesForAdmin(adminId);
+    picojson::array arr;
+    for (const auto& c : classes) {
+        picojson::object o;
+        o["id"] = picojson::value((double)c.id);
+        o["class_name"] = picojson::value(c.class_name);
+        o["course_code"] = picojson::value(c.course_code);
+        o["building"] = picojson::value(c.building);
+        o["room_number"] = picojson::value(c.room_number);
+        o["start_time"] = picojson::value(c.start_time);
+        o["end_time"] = picojson::value(c.end_time);
+        o["days_of_week"] = picojson::value(c.days_of_week);
+        o["enrollment_count"] = picojson::value((double)c.enrollment_count);
+        arr.push_back(picojson::value(o));
+    }
+
+    res.send(Http::Code::Ok, picojson::value(arr).serialize(), MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
+Pistache::Rest::Routes::Post(router, "/admin/classes", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+    if (!authHeader) {
+        res.send(Http::Code::Unauthorized, "Missing Authorization header");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto profile = Auth::verifyBearerToken(authHeader->value());
+    if (!profile.success) {
+        res.send(Http::Code::Unauthorized, profile.error);
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int adminId = 0;
+    std::string role;
+    if (!extractIdAndRoleFromProfileJson(profile.user, adminId, role) || role != "admin") {
+        res.send(Http::Code::Forbidden, "Admin access required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    picojson::object obj;
+    if (!parseJsonObject(req.body(), obj)) {
+        res.send(Http::Code::Bad_Request, "Invalid JSON");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto classNameIt = obj.find("class_name");
+    if (classNameIt == obj.end() || !classNameIt->second.is<std::string>() ||
+        trimString(classNameIt->second.get<std::string>()).empty()) {
+        res.send(Http::Code::Bad_Request, "class_name is required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    std::string className = trimString(classNameIt->second.get<std::string>());
+    std::string courseCode = parseJsonField(req.body(), "course_code");
+    std::string building = parseJsonField(req.body(), "building");
+    std::string roomNumber = parseJsonField(req.body(), "room_number");
+    std::string startTime = parseJsonField(req.body(), "start_time");
+    std::string endTime = parseJsonField(req.body(), "end_time");
+    std::string daysOfWeek = parseJsonField(req.body(), "days_of_week");
+    auto studentEmails = parseStringArrayField(obj, "student_emails");
+
+    auto classIdOpt = DB::createClassForAdmin(
+        adminId,
+        className,
+        trimString(courseCode),
+        trimString(building),
+        trimString(roomNumber),
+        trimString(startTime),
+        trimString(endTime),
+        trimString(daysOfWeek)
+    );
+    if (!classIdOpt) {
+        res.send(Http::Code::Internal_Server_Error, "Failed to create class");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int enrolledCount = DB::enrollStudentsInClassByEmails(*classIdOpt, studentEmails);
+    picojson::object response;
+    response["class_id"] = picojson::value((double)*classIdOpt);
+    response["enrolled_count"] = picojson::value((double)enrolledCount);
+    response["message"] = picojson::value("Class created successfully");
+
+    res.send(Http::Code::Ok, picojson::value(response).serialize(), MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
+Pistache::Rest::Routes::Post(router, "/admin/classes/enroll", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+    if (!authHeader) {
+        res.send(Http::Code::Unauthorized, "Missing Authorization header");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto profile = Auth::verifyBearerToken(authHeader->value());
+    if (!profile.success) {
+        res.send(Http::Code::Unauthorized, profile.error);
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int adminId = 0;
+    std::string role;
+    if (!extractIdAndRoleFromProfileJson(profile.user, adminId, role) || role != "admin") {
+        res.send(Http::Code::Forbidden, "Admin access required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    picojson::object obj;
+    if (!parseJsonObject(req.body(), obj)) {
+        res.send(Http::Code::Bad_Request, "Invalid JSON");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto classIdIt = obj.find("class_id");
+    if (classIdIt == obj.end() || !classIdIt->second.is<double>()) {
+        res.send(Http::Code::Bad_Request, "class_id is required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+    int classId = static_cast<int>(classIdIt->second.get<double>());
+    if (!DB::adminOwnsClass(adminId, classId)) {
+        res.send(Http::Code::Forbidden, "You can only manage classes you created");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto studentEmails = parseStringArrayField(obj, "student_emails");
+    if (studentEmails.empty()) {
+        res.send(Http::Code::Bad_Request, "student_emails is required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int enrolledCount = DB::enrollStudentsInClassByEmails(classId, studentEmails);
+    picojson::object response;
+    response["class_id"] = picojson::value((double)classId);
+    response["enrolled_count"] = picojson::value((double)enrolledCount);
+    response["message"] = picojson::value("Enrollment updated");
+
+    res.send(Http::Code::Ok, picojson::value(response).serialize(), MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
+Pistache::Rest::Routes::Post(router, "/admin/assignments", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+    if (!authHeader) {
+        res.send(Http::Code::Unauthorized, "Missing Authorization header");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto profile = Auth::verifyBearerToken(authHeader->value());
+    if (!profile.success) {
+        res.send(Http::Code::Unauthorized, profile.error);
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int adminId = 0;
+    std::string role;
+    if (!extractIdAndRoleFromProfileJson(profile.user, adminId, role) || role != "admin") {
+        res.send(Http::Code::Forbidden, "Admin access required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    picojson::object obj;
+    if (!parseJsonObject(req.body(), obj)) {
+        res.send(Http::Code::Bad_Request, "Invalid JSON");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto classIdIt = obj.find("class_id");
+    auto assignmentTypeIdIt = obj.find("assignment_type_id");
+    auto titleIt = obj.find("title");
+
+    if (classIdIt == obj.end() || !classIdIt->second.is<double>() ||
+        assignmentTypeIdIt == obj.end() || !assignmentTypeIdIt->second.is<double>() ||
+        titleIt == obj.end() || !titleIt->second.is<std::string>() ||
+        trimString(titleIt->second.get<std::string>()).empty()) {
+        res.send(Http::Code::Bad_Request, "class_id, assignment_type_id, and title are required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int classId = static_cast<int>(classIdIt->second.get<double>());
+    int assignmentTypeId = static_cast<int>(assignmentTypeIdIt->second.get<double>());
+    std::string title = trimString(titleIt->second.get<std::string>());
+
+    if (!DB::adminOwnsClass(adminId, classId)) {
+        res.send(Http::Code::Forbidden, "You can only manage assignments for classes you created");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    std::string description = trimString(parseJsonField(req.body(), "description"));
+    std::string dueDate = trimString(parseJsonField(req.body(), "due_date"));
+    std::string dueTime = trimString(parseJsonField(req.body(), "due_time"));
+    int assignmentTimePrediction = 0;
+    auto predictionIt = obj.find("assignment_time_prediction");
+    if (predictionIt != obj.end() && predictionIt->second.is<double>()) {
+        assignmentTimePrediction = static_cast<int>(predictionIt->second.get<double>());
+    }
+
+    bool ok = DB::createAssignmentForClass(
+        adminId,
+        classId,
+        assignmentTypeId,
+        title,
+        description,
+        dueDate,
+        dueTime,
+        assignmentTimePrediction
+    );
+
+    if (!ok) {
+        res.send(Http::Code::Internal_Server_Error, "Failed to create assignment");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    res.send(Http::Code::Ok, R"({"message":"Assignment created successfully"})", MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
+Pistache::Rest::Routes::Post(router, "/admin/assignments/list", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+    if (!authHeader) {
+        res.send(Http::Code::Unauthorized, "Missing Authorization header");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto profile = Auth::verifyBearerToken(authHeader->value());
+    if (!profile.success) {
+        res.send(Http::Code::Unauthorized, profile.error);
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int adminId = 0;
+    std::string role;
+    if (!extractIdAndRoleFromProfileJson(profile.user, adminId, role) || role != "admin") {
+        res.send(Http::Code::Forbidden, "Admin access required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    picojson::object obj;
+    if (!parseJsonObject(req.body(), obj)) {
+        res.send(Http::Code::Bad_Request, "Invalid JSON");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto classIdIt = obj.find("class_id");
+    if (classIdIt == obj.end() || !classIdIt->second.is<double>()) {
+        res.send(Http::Code::Bad_Request, "class_id is required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int classId = static_cast<int>(classIdIt->second.get<double>());
+    auto assignments = DB::getAssignmentsForAdminClass(adminId, classId);
+
+    picojson::array arr;
+    for (const auto& a : assignments) {
+        picojson::object o;
+        o["id"] = picojson::value((double)a.id);
+        o["class_id"] = picojson::value((double)a.class_id);
+        o["assignment_type_id"] = picojson::value((double)a.assignment_type_id);
+        o["title"] = picojson::value(a.title);
+        o["description"] = picojson::value(a.description);
+        o["type_name"] = picojson::value(a.type_name);
+        o["assignment_time_prediction"] = picojson::value((double)a.assignment_time_prediction);
+        o["due_date"] = picojson::value(a.due_date);
+        o["due_time"] = picojson::value(a.due_time);
+        arr.push_back(picojson::value(o));
+    }
+
+    res.send(Http::Code::Ok, picojson::value(arr).serialize(), MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
+Pistache::Rest::Routes::Post(router, "/admin/assignments/update", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+    if (!authHeader) {
+        res.send(Http::Code::Unauthorized, "Missing Authorization header");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto profile = Auth::verifyBearerToken(authHeader->value());
+    if (!profile.success) {
+        res.send(Http::Code::Unauthorized, profile.error);
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int adminId = 0;
+    std::string role;
+    if (!extractIdAndRoleFromProfileJson(profile.user, adminId, role) || role != "admin") {
+        res.send(Http::Code::Forbidden, "Admin access required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    picojson::object obj;
+    if (!parseJsonObject(req.body(), obj)) {
+        res.send(Http::Code::Bad_Request, "Invalid JSON");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto assignmentIdIt = obj.find("assignment_id");
+    auto classIdIt = obj.find("class_id");
+    auto assignmentTypeIdIt = obj.find("assignment_type_id");
+    auto titleIt = obj.find("title");
+
+    if (assignmentIdIt == obj.end() || !assignmentIdIt->second.is<double>() ||
+        classIdIt == obj.end() || !classIdIt->second.is<double>() ||
+        assignmentTypeIdIt == obj.end() || !assignmentTypeIdIt->second.is<double>() ||
+        titleIt == obj.end() || !titleIt->second.is<std::string>() ||
+        trimString(titleIt->second.get<std::string>()).empty()) {
+        res.send(Http::Code::Bad_Request, "assignment_id, class_id, assignment_type_id, and title are required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int assignmentId = static_cast<int>(assignmentIdIt->second.get<double>());
+    int classId = static_cast<int>(classIdIt->second.get<double>());
+    int assignmentTypeId = static_cast<int>(assignmentTypeIdIt->second.get<double>());
+    std::string title = trimString(titleIt->second.get<std::string>());
+
+    std::string description = trimString(parseJsonField(req.body(), "description"));
+    std::string dueDate = trimString(parseJsonField(req.body(), "due_date"));
+    std::string dueTime = trimString(parseJsonField(req.body(), "due_time"));
+    int assignmentTimePrediction = 0;
+    auto predictionIt = obj.find("assignment_time_prediction");
+    if (predictionIt != obj.end() && predictionIt->second.is<double>()) {
+        assignmentTimePrediction = static_cast<int>(predictionIt->second.get<double>());
+    }
+
+    bool ok = DB::updateAssignmentForAdmin(
+        adminId,
+        assignmentId,
+        classId,
+        assignmentTypeId,
+        title,
+        description,
+        dueDate,
+        dueTime,
+        assignmentTimePrediction
+    );
+
+    if (!ok) {
+        res.send(Http::Code::Forbidden, "You can only edit assignments for classes you created");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    res.send(Http::Code::Ok, R"({"message":"Assignment updated successfully"})", MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
+Pistache::Rest::Routes::Post(router, "/admin/classes/roster", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+    if (!authHeader) {
+        res.send(Http::Code::Unauthorized, "Missing Authorization header");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto profile = Auth::verifyBearerToken(authHeader->value());
+    if (!profile.success) {
+        res.send(Http::Code::Unauthorized, profile.error);
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int adminId = 0;
+    std::string role;
+    if (!extractIdAndRoleFromProfileJson(profile.user, adminId, role) || role != "admin") {
+        res.send(Http::Code::Forbidden, "Admin access required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    picojson::object obj;
+    if (!parseJsonObject(req.body(), obj)) {
+        res.send(Http::Code::Bad_Request, "Invalid JSON");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto classIdIt = obj.find("class_id");
+    if (classIdIt == obj.end() || !classIdIt->second.is<double>()) {
+        res.send(Http::Code::Bad_Request, "class_id is required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int classId = static_cast<int>(classIdIt->second.get<double>());
+    if (!DB::adminOwnsClass(adminId, classId)) {
+        res.send(Http::Code::Forbidden, "You can only view roster for classes you created");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto roster = DB::getRosterForAdminClass(adminId, classId);
+    picojson::array arr;
+    for (const auto& s : roster) {
+        picojson::object o;
+        o["id"] = picojson::value((double)s.id);
+        o["name"] = picojson::value(s.name);
+        o["email"] = picojson::value(s.email);
+        arr.push_back(picojson::value(o));
+    }
+
+    res.send(Http::Code::Ok, picojson::value(arr).serialize(), MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
+Pistache::Rest::Routes::Post(router, "/admin/classes/roster/add", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+    if (!authHeader) {
+        res.send(Http::Code::Unauthorized, "Missing Authorization header");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto profile = Auth::verifyBearerToken(authHeader->value());
+    if (!profile.success) {
+        res.send(Http::Code::Unauthorized, profile.error);
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int adminId = 0;
+    std::string role;
+    if (!extractIdAndRoleFromProfileJson(profile.user, adminId, role) || role != "admin") {
+        res.send(Http::Code::Forbidden, "Admin access required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    picojson::object obj;
+    if (!parseJsonObject(req.body(), obj)) {
+        res.send(Http::Code::Bad_Request, "Invalid JSON");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto classIdIt = obj.find("class_id");
+    auto emailIt = obj.find("email");
+    if (classIdIt == obj.end() || !classIdIt->second.is<double>() ||
+        emailIt == obj.end() || !emailIt->second.is<std::string>() ||
+        trimString(emailIt->second.get<std::string>()).empty()) {
+        res.send(Http::Code::Bad_Request, "class_id and email are required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    int classId = static_cast<int>(classIdIt->second.get<double>());
+    std::string email = trimString(emailIt->second.get<std::string>());
+    std::string name = trimString(parseJsonField(req.body(), "name"));
+
+    bool ok = DB::addStudentToAdminClass(adminId, classId, name, email);
+    if (!ok) {
+        res.send(Http::Code::Forbidden, "Failed to add student to class");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    res.send(Http::Code::Ok, R"({"message":"Student added to class successfully"})", MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
 
     // ==================== GET TRAVEL LOCATIONS ====================
     Pistache::Rest::Routes::Get(router, "/travel/locations", [&](const Rest::Request req, Http::ResponseWriter res) {

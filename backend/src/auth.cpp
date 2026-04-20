@@ -73,13 +73,13 @@ static std::string hmacSha256(const std::string& data, const std::string& key) {
     return std::string(reinterpret_cast<char*>(digest), digestLen);
 }
 
-static std::string createJwtToken(int userId) {
+static std::string createJwtToken(int userId, const std::string& role) {
     std::string header = R"({"alg":"HS256","typ":"JWT"})";
     auto now = std::chrono::system_clock::now();
     auto exp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count() + 24 * 60 * 60;
 
     std::string payload = std::string("{\"iss\":\"") + JWT_ISSUER +
-        "\",\"sub\":\"" + std::to_string(userId) + "\",\"exp\":" + std::to_string(exp) + "}";
+        "\",\"sub\":\"" + std::to_string(userId) + "\",\"role\":\"" + role + "\",\"exp\":" + std::to_string(exp) + "}";
 
     std::string encodedHeader = base64UrlEncode(reinterpret_cast<const unsigned char*>(header.data()), header.size());
     std::string encodedPayload = base64UrlEncode(reinterpret_cast<const unsigned char*>(payload.data()), payload.size());
@@ -115,7 +115,7 @@ AuthResult Auth::loginFromJson(const std::string& body) {
         }
 
         try {
-            auto token = createJwtToken(admin.id);
+            auto token = createJwtToken(admin.id, "admin");
             return AuthResult{true, token, "admin", ""};
         } catch (const std::exception&) {
             return {false, "", "", "Internal server error: could not create token"};
@@ -144,7 +144,7 @@ AuthResult Auth::loginFromJson(const std::string& body) {
 
     try {
         fprintf(stderr, "[DEBUG] Attempting JWT creation\n");
-        auto token = createJwtToken(user.id);
+        auto token = createJwtToken(user.id, "student");
 
         fprintf(stderr, "[DEBUG] JWT created successfully, length=%zu\n", token.size());
         return AuthResult{true, token, "student", ""};
@@ -218,14 +218,36 @@ UserProfileResult Auth::verifyBearerToken(const std::string& tokenString) {
         if (subIt == payloadObj.end() || !subIt->second.is<std::string>()) {
             return {false, {}, "Invalid token subject"};
         }
+        auto roleIt = payloadObj.find("role");
+        if (roleIt == payloadObj.end() || !roleIt->second.is<std::string>()) {
+            return {false, {}, "Invalid token role"};
+        }
+
+        std::string role = roleIt->second.get<std::string>();
         int userId = std::stoi(subIt->second.get<std::string>());
+        if (role == "admin") {
+            std::string email;
+            auto adminOpt = DB::findAdminById(userId);
+            if (adminOpt) {
+                email = adminOpt->email;
+            }
+
+            std::string userJson = std::string("{\"id\":") + std::to_string(userId) +
+                ",\"email\":\"" + email + "\",\"role\":\"admin\"}";
+            return {true, userJson, ""};
+        }
+
+        if (role != "student") {
+            return {false, {}, "Invalid token role"};
+        }
+
         auto userOpt = DB::findUserById(userId);
         if (!userOpt) {
             return {false, {}, "User not found"};
         }
-
         auto user = *userOpt;
-        std::string userJson = std::string("{\"id\":") + std::to_string(user.id) + ",\"email\":\"" + user.email + "\"}";
+        std::string userJson = std::string("{\"id\":") + std::to_string(user.id) +
+            ",\"email\":\"" + user.email + "\",\"role\":\"student\"}";
         return {true, userJson, ""};
     } catch (const std::exception& e) {
         return {false, {}, e.what()};

@@ -1,0 +1,208 @@
+.admin-card {
+  width: min(860px, 95%);
+  padding: 1.5rem;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.admin-subtitle {
+  margin-top: 0.25rem;
+  color: #555;
+}
+
+.admin-section {
+  text-align: left;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+
+.admin-section h3 {
+  margin: 0 0 0.75rem;
+}
+
+.minimal-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.split-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.admin-card-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-card-list.vertical {
+  grid-template-columns: 1fr;
+}
+
+.entity-card {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #ddd;
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.entity-card:hover {
+  border-color: #ff8a00;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.entity-card.static-card {
+  cursor: default;
+}
+
+.entity-card.static-card:hover {
+  border-color: #ddd;
+  box-shadow: none;
+  transform: none;
+}
+
+.entity-card-title {
+  font-weight: 700;
+  color: #222;
+}
+
+.entity-card-meta {
+  margin-top: 0.35rem;
+  font-size: 0.92rem;
+  color: #666;
+}
+
+.admin-form-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.day-selector {
+  text-align: left;
+}
+
+.day-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.day-pill {
+  padding: 0.8rem 0.25rem;
+  border-radius: 999px;
+  border: 1px solid #d8d8d8;
+  background: #fafafa;
+  color: #333;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.day-pill:hover {
+  transform: translateY(-1px);
+  border-color: #c7c7c7;
+}
+
+.day-pill.selected {
+  background: linear-gradient(135deg, #ff3c3c, #ff8a00);
+  color: #fff;
+  border-color: transparent;
+}
+
+.day-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #666;
+  text-align: left;
+}
+
+.admin-form-grid textarea {
+  width: 100%;
+  min-height: 70px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  font-size: 1rem;
+  resize: vertical;
+}
+
+.admin-form-grid select {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  font-size: 1rem;
+}
+
+.admin-list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.admin-success {
+  color: #0f7b30;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+}
+
+.modal-card {
+  width: min(460px, 100%);
+  background: #fff;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.modal-card h3 {
+  margin-top: 0;
+}
+
+@media (max-width: 768px) {
+  .admin-card {
+    width: 100%;
+    padding: 1rem;
+  }
+
+  .day-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .day-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

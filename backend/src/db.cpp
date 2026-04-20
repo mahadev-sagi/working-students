@@ -45,6 +45,30 @@ std::optional<UserRow> DB::findAdminByEmail(const std::string& email) {
     return row;
 }
 
+std::optional<UserRow> DB::findAdminById(int id) {
+    if (!g_conn) return std::nullopt;
+
+    std::string idStr = std::to_string(id);
+    const char* paramValues[1] = {idStr.c_str()};
+    PGresult* res = PQexecParams(g_conn,
+        "SELECT id, email, password_hash FROM admin_users WHERE id=$1",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (!res) return std::nullopt;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1) {
+        PQclear(res);
+        return std::nullopt;
+    }
+
+    UserRow row;
+    row.id = std::atoi(PQgetvalue(res, 0, 0));
+    row.email = PQgetvalue(res, 0, 1);
+    row.password_hash = PQgetvalue(res, 0, 2);
+    PQclear(res);
+
+    return row;
+}
+
 std::optional<UserRow> DB::findUserByEmail(const std::string& email) {
     if (!g_conn) return std::nullopt;
 
@@ -489,4 +513,368 @@ TravelRoute DB::calculateTravelRoute(const std::string& fromCode, const std::str
     }
 
     return result;
+}
+
+std::vector<AdminClassRow> DB::getClassesForAdmin(int adminId) {
+    std::vector<AdminClassRow> rows;
+    if (!g_conn) return rows;
+
+    std::string adminIdStr = std::to_string(adminId);
+    const char* paramValues[1] = {adminIdStr.c_str()};
+    PGresult* res = PQexecParams(
+        g_conn,
+        "SELECT c.id, c.class_name, COALESCE(c.course_code, ''), COALESCE(c.building, ''), "
+        "COALESCE(c.room_number, ''), COALESCE(c.start_time::TEXT, ''), COALESCE(c.end_time::TEXT, ''), "
+        "COALESCE(c.days_of_week, ''), COUNT(e.student_id) AS enrollment_count "
+        "FROM classes c "
+        "LEFT JOIN enrollments e ON e.class_id = c.id "
+        "WHERE c.instructor_id = $1 "
+        "GROUP BY c.id "
+        "ORDER BY c.id DESC",
+        1, nullptr, paramValues, nullptr, nullptr, 0
+    );
+
+    if (!res) return rows;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return rows;
+    }
+
+    int tupleCount = PQntuples(res);
+    for (int i = 0; i < tupleCount; ++i) {
+        AdminClassRow row;
+        row.id = std::atoi(PQgetvalue(res, i, 0));
+        row.class_name = PQgetvalue(res, i, 1);
+        row.course_code = PQgetvalue(res, i, 2);
+        row.building = PQgetvalue(res, i, 3);
+        row.room_number = PQgetvalue(res, i, 4);
+        row.start_time = PQgetvalue(res, i, 5);
+        row.end_time = PQgetvalue(res, i, 6);
+        row.days_of_week = PQgetvalue(res, i, 7);
+        row.enrollment_count = std::atoi(PQgetvalue(res, i, 8));
+        rows.push_back(row);
+    }
+    PQclear(res);
+    return rows;
+}
+
+std::vector<AssignmentTypeRow> DB::getAssignmentTypes() {
+    std::vector<AssignmentTypeRow> rows;
+    if (!g_conn) return rows;
+
+    PGresult* res = PQexec(g_conn,
+        "SELECT id, type_name, avg_completion_hours "
+        "FROM assignment_types "
+        "ORDER BY type_name"
+    );
+
+    if (!res) return rows;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return rows;
+    }
+
+    int tupleCount = PQntuples(res);
+    for (int i = 0; i < tupleCount; ++i) {
+        AssignmentTypeRow row;
+        row.id = std::atoi(PQgetvalue(res, i, 0));
+        row.type_name = PQgetvalue(res, i, 1);
+        row.avg_completion_hours = std::atoi(PQgetvalue(res, i, 2));
+        rows.push_back(row);
+    }
+    PQclear(res);
+    return rows;
+}
+
+std::optional<int> DB::createClassForAdmin(
+    int adminId,
+    const std::string& className,
+    const std::string& courseCode,
+    const std::string& building,
+    const std::string& roomNumber,
+    const std::string& startTime,
+    const std::string& endTime,
+    const std::string& daysOfWeek
+) {
+    if (!g_conn) return std::nullopt;
+
+    std::string adminIdStr = std::to_string(adminId);
+    const char* paramValues[8] = {
+        className.c_str(),
+        courseCode.empty() ? nullptr : courseCode.c_str(),
+        adminIdStr.c_str(),
+        building.empty() ? nullptr : building.c_str(),
+        roomNumber.empty() ? nullptr : roomNumber.c_str(),
+        startTime.empty() ? nullptr : startTime.c_str(),
+        endTime.empty() ? nullptr : endTime.c_str(),
+        daysOfWeek.empty() ? nullptr : daysOfWeek.c_str()
+    };
+
+    PGresult* res = PQexecParams(
+        g_conn,
+        "INSERT INTO classes (class_name, course_code, instructor_id, building, room_number, start_time, end_time, days_of_week) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
+        8, nullptr, paramValues, nullptr, nullptr, 0
+    );
+
+    if (!res) return std::nullopt;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1) {
+        PQclear(res);
+        return std::nullopt;
+    }
+
+    int classId = std::atoi(PQgetvalue(res, 0, 0));
+    PQclear(res);
+    return classId;
+}
+
+bool DB::adminOwnsClass(int adminId, int classId) {
+    if (!g_conn) return false;
+
+    std::string adminIdStr = std::to_string(adminId);
+    std::string classIdStr = std::to_string(classId);
+    const char* paramValues[2] = {classIdStr.c_str(), adminIdStr.c_str()};
+    PGresult* res = PQexecParams(
+        g_conn,
+        "SELECT 1 FROM classes WHERE id=$1 AND instructor_id=$2",
+        2, nullptr, paramValues, nullptr, nullptr, 0
+    );
+
+    if (!res) return false;
+    bool owns = PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) == 1;
+    PQclear(res);
+    return owns;
+}
+
+int DB::enrollStudentsInClassByEmails(int classId, const std::vector<std::string>& emails) {
+    if (!g_conn) return 0;
+
+    int insertedTotal = 0;
+    std::string classIdStr = std::to_string(classId);
+    for (const auto& email : emails) {
+        if (email.empty()) continue;
+        const char* paramValues[2] = {classIdStr.c_str(), email.c_str()};
+        PGresult* res = PQexecParams(
+            g_conn,
+            "INSERT INTO enrollments (student_id, class_id) "
+            "SELECT s.id, $1 FROM students s WHERE s.email = $2 "
+            "ON CONFLICT (student_id, class_id) DO NOTHING",
+            2, nullptr, paramValues, nullptr, nullptr, 0
+        );
+        if (!res) continue;
+        if (PQresultStatus(res) == PGRES_COMMAND_OK) {
+            const char* tupleCount = PQcmdTuples(res);
+            if (tupleCount && tupleCount[0] != '\0') {
+                insertedTotal += std::atoi(tupleCount);
+            }
+        }
+        PQclear(res);
+    }
+
+    return insertedTotal;
+}
+
+bool DB::createAssignmentForClass(
+    int adminId,
+    int classId,
+    int assignmentTypeId,
+    const std::string& title,
+    const std::string& description,
+    const std::string& dueDate,
+    const std::string& dueTime,
+    int assignmentTimePrediction
+) {
+    if (!g_conn) return false;
+
+    std::string adminIdStr = std::to_string(adminId);
+    std::string classIdStr = std::to_string(classId);
+    std::string assignmentTypeIdStr = std::to_string(assignmentTypeId);
+    std::string assignmentPredictionStr = std::to_string(assignmentTimePrediction);
+
+    const char* paramValues[8] = {
+        classIdStr.c_str(),
+        assignmentTypeIdStr.c_str(),
+        assignmentPredictionStr.c_str(),
+        title.c_str(),
+        description.empty() ? nullptr : description.c_str(),
+        dueTime.empty() ? nullptr : dueTime.c_str(),
+        dueDate.empty() ? nullptr : dueDate.c_str(),
+        adminIdStr.c_str()
+    };
+
+    PGresult* res = PQexecParams(
+        g_conn,
+        "INSERT INTO assignments (class_id, assignment_type_id, assignment_time_prediction, title, description, due_time, due_date) "
+        "SELECT $1, $2, $3, $4, COALESCE($5, ''), $6, $7 "
+        "WHERE EXISTS (SELECT 1 FROM classes WHERE id = $1 AND instructor_id = $8)",
+        8, nullptr, paramValues, nullptr, nullptr, 0
+    );
+
+    if (!res) return false;
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK && std::atoi(PQcmdTuples(res)) == 1;
+    PQclear(res);
+    return ok;
+}
+
+std::vector<AdminAssignmentRow> DB::getAssignmentsForAdminClass(int adminId, int classId) {
+    std::vector<AdminAssignmentRow> rows;
+    if (!g_conn) return rows;
+
+    std::string adminIdStr = std::to_string(adminId);
+    std::string classIdStr = std::to_string(classId);
+    const char* paramValues[2] = {adminIdStr.c_str(), classIdStr.c_str()};
+
+    PGresult* res = PQexecParams(
+        g_conn,
+        "SELECT a.id, a.class_id, a.assignment_type_id, a.title, COALESCE(a.description, ''), "
+        "at.type_name, COALESCE(a.assignment_time_prediction, 0), COALESCE(a.due_date::TEXT, ''), COALESCE(a.due_time::TEXT, '') "
+        "FROM assignments a "
+        "JOIN classes c ON c.id = a.class_id "
+        "JOIN assignment_types at ON at.id = a.assignment_type_id "
+        "WHERE c.instructor_id = $1 AND a.class_id = $2 "
+        "ORDER BY a.id ASC",
+        2, nullptr, paramValues, nullptr, nullptr, 0
+    );
+
+    if (!res) return rows;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return rows;
+    }
+
+    int tupleCount = PQntuples(res);
+    for (int i = 0; i < tupleCount; ++i) {
+        AdminAssignmentRow row;
+        row.id = std::atoi(PQgetvalue(res, i, 0));
+        row.class_id = std::atoi(PQgetvalue(res, i, 1));
+        row.assignment_type_id = std::atoi(PQgetvalue(res, i, 2));
+        row.title = PQgetvalue(res, i, 3);
+        row.description = PQgetvalue(res, i, 4);
+        row.type_name = PQgetvalue(res, i, 5);
+        row.assignment_time_prediction = std::atoi(PQgetvalue(res, i, 6));
+        row.due_date = PQgetvalue(res, i, 7);
+        row.due_time = PQgetvalue(res, i, 8);
+        rows.push_back(row);
+    }
+
+    PQclear(res);
+    return rows;
+}
+
+bool DB::updateAssignmentForAdmin(
+    int adminId,
+    int assignmentId,
+    int classId,
+    int assignmentTypeId,
+    const std::string& title,
+    const std::string& description,
+    const std::string& dueDate,
+    const std::string& dueTime,
+    int assignmentTimePrediction
+) {
+    if (!g_conn) return false;
+
+    std::string adminIdStr = std::to_string(adminId);
+    std::string assignmentIdStr = std::to_string(assignmentId);
+    std::string classIdStr = std::to_string(classId);
+    std::string assignmentTypeIdStr = std::to_string(assignmentTypeId);
+    std::string assignmentPredictionStr = std::to_string(assignmentTimePrediction);
+
+    const char* paramValues[9] = {
+        assignmentIdStr.c_str(),
+        classIdStr.c_str(),
+        assignmentTypeIdStr.c_str(),
+        title.c_str(),
+        description.empty() ? nullptr : description.c_str(),
+        dueDate.empty() ? nullptr : dueDate.c_str(),
+        dueTime.empty() ? nullptr : dueTime.c_str(),
+        assignmentPredictionStr.c_str(),
+        adminIdStr.c_str()
+    };
+
+    PGresult* res = PQexecParams(
+        g_conn,
+        "UPDATE assignments a "
+        "SET class_id = $2, assignment_type_id = $3, title = $4, description = COALESCE($5, ''), due_date = $6, due_time = $7, assignment_time_prediction = $8 "
+        "FROM classes c "
+        "WHERE a.id = $1 AND c.id = $2 AND c.instructor_id = $9",
+        9, nullptr, paramValues, nullptr, nullptr, 0
+    );
+
+    if (!res) return false;
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK && std::atoi(PQcmdTuples(res)) == 1;
+    PQclear(res);
+    return ok;
+}
+
+std::vector<AdminRosterStudentRow> DB::getRosterForAdminClass(int adminId, int classId) {
+    std::vector<AdminRosterStudentRow> rows;
+    if (!g_conn) return rows;
+
+    std::string adminIdStr = std::to_string(adminId);
+    std::string classIdStr = std::to_string(classId);
+    const char* paramValues[2] = {adminIdStr.c_str(), classIdStr.c_str()};
+
+    PGresult* res = PQexecParams(
+        g_conn,
+        "SELECT s.id, COALESCE(s.name, ''), s.email "
+        "FROM enrollments e "
+        "JOIN students s ON s.id = e.student_id "
+        "JOIN classes c ON c.id = e.class_id "
+        "WHERE c.instructor_id = $1 AND c.id = $2 "
+        "ORDER BY s.name ASC, s.email ASC",
+        2, nullptr, paramValues, nullptr, nullptr, 0
+    );
+
+    if (!res) return rows;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return rows;
+    }
+
+    int tupleCount = PQntuples(res);
+    for (int i = 0; i < tupleCount; ++i) {
+        AdminRosterStudentRow row;
+        row.id = std::atoi(PQgetvalue(res, i, 0));
+        row.name = PQgetvalue(res, i, 1);
+        row.email = PQgetvalue(res, i, 2);
+        rows.push_back(row);
+    }
+
+    PQclear(res);
+    return rows;
+}
+
+bool DB::addStudentToAdminClass(int adminId, int classId, const std::string& name, const std::string& email) {
+    if (!g_conn) return false;
+    if (!adminOwnsClass(adminId, classId)) return false;
+
+    std::string classIdStr = std::to_string(classId);
+    const char* paramValues[3] = {
+        name.empty() ? nullptr : name.c_str(),
+        email.c_str(),
+        classIdStr.c_str()
+    };
+
+    PGresult* res = PQexecParams(
+        g_conn,
+        "WITH upsert_student AS ("
+        "  INSERT INTO students (name, email, password_hash) VALUES ($1, $2, NULL) "
+        "  ON CONFLICT (email) DO UPDATE "
+        "  SET name = CASE "
+        "      WHEN EXCLUDED.name IS NULL OR EXCLUDED.name = '' THEN students.name "
+        "      ELSE EXCLUDED.name "
+        "  END "
+        "  RETURNING id"
+        ") "
+        "INSERT INTO enrollments (student_id, class_id) "
+        "SELECT id, $3 FROM upsert_student "
+        "ON CONFLICT (student_id, class_id) DO NOTHING",
+        3, nullptr, paramValues, nullptr, nullptr, 0
+    );
+
+    if (!res) return false;
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    PQclear(res);
+    return ok;
 }
