@@ -305,9 +305,7 @@ std::vector<StudentAssignmentRow> DB::getAssignmentsForStudent(int studentId) {
     return rows;
 }
 
-// ============================================================================
 // Travel Algorithm Database Functions
-// ============================================================================
 
 std::vector<TravelLocation> DB::getAllCampusLocations() {
     std::vector<TravelLocation> locations;
@@ -448,16 +446,16 @@ TravelRoute DB::calculateTravelRoute(const std::string& fromCode, const std::str
     }
 
     if (distances[toLoc->id] == INT_MAX) {
-        return result; // No path found
+        return result;
     }
 
     // Reconstruct path
     result.distance_meters = distances[toLoc->id];
     result.found = true;
 
-    // Calculate travel time (walking speed: 1.4 m/s, plus 2 min transition time)
+    // Calculate travel time
     double travelSeconds = result.distance_meters / 1.4;
-    double totalSeconds = travelSeconds + 120; // 2 minutes transition time
+    double totalSeconds = travelSeconds + 120;
     result.travel_time_minutes = std::ceil(totalSeconds / 60.0);
 
     // Build path
