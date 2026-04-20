@@ -25,6 +25,8 @@ static std::string parseJsonField(const std::string& body, const std::string& ke
 static void addCorsHeaders(Http::ResponseWriter& res) {
     res.headers()
         .add<Http::Header::AccessControlAllowOrigin>("https://working-students.vercel.app");
+    res.headers().add<Http::Header::AccessControlAllowMethods>("GET, POST, PUT, DELETE, OPTIONS");
+    res.headers().add<Http::Header::AccessControlAllowHeaders>("Content-Type, Authorization");
 }
 
 static bool parseJsonObject(const std::string& body, picojson::object& outObj) {
@@ -187,6 +189,46 @@ int main() {
         res.headers().add<Http::Header::AccessControlAllowOrigin>("https://working-students.vercel.app");
         res.headers().add<Http::Header::AccessControlAllowMethods>("GET, POST, PUT, DELETE, OPTIONS");
         res.headers().add<Http::Header::AccessControlAllowHeaders>("Content-Type, Authorization");
+        res.send(Http::Code::Ok);
+        return Rest::Route::Result::Ok;
+    });
+    Pistache::Rest::Routes::Options(router, "/admin/assignment-types", [](const Rest::Request req, Http::ResponseWriter res) {
+        addCorsHeaders(res);
+        res.send(Http::Code::Ok);
+        return Rest::Route::Result::Ok;
+    });
+    Pistache::Rest::Routes::Options(router, "/admin/classes", [](const Rest::Request req, Http::ResponseWriter res) {
+        addCorsHeaders(res);
+        res.send(Http::Code::Ok);
+        return Rest::Route::Result::Ok;
+    });
+    Pistache::Rest::Routes::Options(router, "/admin/classes/enroll", [](const Rest::Request req, Http::ResponseWriter res) {
+        addCorsHeaders(res);
+        res.send(Http::Code::Ok);
+        return Rest::Route::Result::Ok;
+    });
+    Pistache::Rest::Routes::Options(router, "/admin/assignments", [](const Rest::Request req, Http::ResponseWriter res) {
+        addCorsHeaders(res);
+        res.send(Http::Code::Ok);
+        return Rest::Route::Result::Ok;
+    });
+    Pistache::Rest::Routes::Options(router, "/admin/assignments/list", [](const Rest::Request req, Http::ResponseWriter res) {
+        addCorsHeaders(res);
+        res.send(Http::Code::Ok);
+        return Rest::Route::Result::Ok;
+    });
+    Pistache::Rest::Routes::Options(router, "/admin/assignments/update", [](const Rest::Request req, Http::ResponseWriter res) {
+        addCorsHeaders(res);
+        res.send(Http::Code::Ok);
+        return Rest::Route::Result::Ok;
+    });
+    Pistache::Rest::Routes::Options(router, "/admin/classes/roster", [](const Rest::Request req, Http::ResponseWriter res) {
+        addCorsHeaders(res);
+        res.send(Http::Code::Ok);
+        return Rest::Route::Result::Ok;
+    });
+    Pistache::Rest::Routes::Options(router, "/admin/classes/roster/add", [](const Rest::Request req, Http::ResponseWriter res) {
+        addCorsHeaders(res);
         res.send(Http::Code::Ok);
         return Rest::Route::Result::Ok;
     });
@@ -514,6 +556,7 @@ int main() {
 // ==================== ADMIN ENDPOINTS ====================
 
 Pistache::Rest::Routes::Get(router, "/admin/assignment-types", [&](const Rest::Request req, Http::ResponseWriter res) {
+    addCorsHeaders(res);
     auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
     if (!authHeader) {
         res.send(Http::Code::Unauthorized, "Missing Authorization header");
@@ -548,6 +591,7 @@ Pistache::Rest::Routes::Get(router, "/admin/assignment-types", [&](const Rest::R
 });
 
 Pistache::Rest::Routes::Get(router, "/admin/classes", [&](const Rest::Request req, Http::ResponseWriter res) {
+    addCorsHeaders(res);
     auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
     if (!authHeader) {
         res.send(Http::Code::Unauthorized, "Missing Authorization header");
@@ -588,6 +632,7 @@ Pistache::Rest::Routes::Get(router, "/admin/classes", [&](const Rest::Request re
 });
 
 Pistache::Rest::Routes::Post(router, "/admin/classes", [&](const Rest::Request req, Http::ResponseWriter res) {
+    addCorsHeaders(res);
     auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
     if (!authHeader) {
         res.send(Http::Code::Unauthorized, "Missing Authorization header");
@@ -655,6 +700,7 @@ Pistache::Rest::Routes::Post(router, "/admin/classes", [&](const Rest::Request r
 });
 
 Pistache::Rest::Routes::Post(router, "/admin/classes/enroll", [&](const Rest::Request req, Http::ResponseWriter res) {
+    addCorsHeaders(res);
     auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
     if (!authHeader) {
         res.send(Http::Code::Unauthorized, "Missing Authorization header");
@@ -708,6 +754,7 @@ Pistache::Rest::Routes::Post(router, "/admin/classes/enroll", [&](const Rest::Re
 });
 
 Pistache::Rest::Routes::Post(router, "/admin/assignments", [&](const Rest::Request req, Http::ResponseWriter res) {
+    addCorsHeaders(res);
     auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
     if (!authHeader) {
         res.send(Http::Code::Unauthorized, "Missing Authorization header");
@@ -784,6 +831,7 @@ Pistache::Rest::Routes::Post(router, "/admin/assignments", [&](const Rest::Reque
 });
 
 Pistache::Rest::Routes::Post(router, "/admin/assignments/list", [&](const Rest::Request req, Http::ResponseWriter res) {
+    addCorsHeaders(res);
     auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
     if (!authHeader) {
         res.send(Http::Code::Unauthorized, "Missing Authorization header");
@@ -838,6 +886,7 @@ Pistache::Rest::Routes::Post(router, "/admin/assignments/list", [&](const Rest::
 });
 
 Pistache::Rest::Routes::Post(router, "/admin/assignments/update", [&](const Rest::Request req, Http::ResponseWriter res) {
+    addCorsHeaders(res);
     auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
     if (!authHeader) {
         res.send(Http::Code::Unauthorized, "Missing Authorization header");
@@ -913,6 +962,7 @@ Pistache::Rest::Routes::Post(router, "/admin/assignments/update", [&](const Rest
 });
 
 Pistache::Rest::Routes::Post(router, "/admin/classes/roster", [&](const Rest::Request req, Http::ResponseWriter res) {
+    addCorsHeaders(res);
     auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
     if (!authHeader) {
         res.send(Http::Code::Unauthorized, "Missing Authorization header");
@@ -965,6 +1015,7 @@ Pistache::Rest::Routes::Post(router, "/admin/classes/roster", [&](const Rest::Re
 });
 
 Pistache::Rest::Routes::Post(router, "/admin/classes/roster/add", [&](const Rest::Request req, Http::ResponseWriter res) {
+    addCorsHeaders(res);
     auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
     if (!authHeader) {
         res.send(Http::Code::Unauthorized, "Missing Authorization header");
