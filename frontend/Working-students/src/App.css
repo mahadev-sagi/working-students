@@ -4,10 +4,10 @@
 
 
 #root {
-  max-width: 1280px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  padding: 1rem 1.5rem; 
+  text-align: left;
 }
 
 .logo {
@@ -54,22 +54,20 @@ button {
 
 .page {
   min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: block;
   background: #f5f5f5;
-  padding: 1rem;
+  padding: 1rem 0; 
 }
 .home-card,
 .calculator-card {
-  width: min(420px, 90%);
+  width: min(680px, 100%);
   padding: 2rem;
-  border-radius: 16px;
-  background: white; 
+  border-radius: 14px;
+  background: var(--card-bg, #fff);
   position: relative;
-  text-align: center;
-  font-size: 1.1rem;
-  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+  text-align: left;
+  font-size: 1.05rem;
+  box-shadow: 0 8px 30px rgba(16,24,40,0.06);
 }
 .home-card::before,
 .calculator-card::before {
@@ -88,20 +86,16 @@ button {
 
   pointer-events: none; 
 }
-/* Gradient border */
 .home-card::before,
 .calculator-card::before {
+
   content: "";
   position: absolute;
   inset: 0;
-  padding: 5px; /* thickness of border */
-  border-radius: 16px;
-  background: linear-gradient(135deg, #ff3c3c, #ffcc00);
-  
-  
-  -webkit-mask: 
-    linear-gradient(#fff 0 0) content-box, 
-    linear-gradient(#fff 0 0);
+  padding: 5px; 
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(91,140,255,0.16), rgba(255,138,128,0.12));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
@@ -149,9 +143,16 @@ input {
 }
 .page {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  background: #f9f9f9;
+  display: block;
+  background: transparent;
+}
+
+
+.soft-card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 8px 20px rgba(16,24,40,0.06);
 }
 
 .home-card,
