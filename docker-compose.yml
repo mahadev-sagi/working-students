@@ -6,6 +6,8 @@ services:
     ports:
       - "9080:9080"
     restart: on-failure
+    depends_on:
+      - db
 
   frontend:
     build: ./frontend/Working-students
@@ -14,14 +16,13 @@ services:
     depends_on:
       - backend
 
-  # Local DB — uncomment for offline development
-  # db:
-  #   image: postgres:16
-  #   environment:
-  #     POSTGRES_DB: workingstudents
-  #     POSTGRES_USER: ws_app
-  #     POSTGRES_PASSWORD: changeme
-  #   volumes:
-  #     - ./db-init/workingstudents.sql:/docker-entrypoint-initdb.d/workingstudents.sql
-  #   ports:
-  #     - "5432:5432"
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: workingstudents
+      POSTGRES_USER: ws_app
+      POSTGRES_PASSWORD: changeme
+    volumes:
+      - ./db-init/workingstudents.sql:/docker-entrypoint-initdb.d/workingstudents.sql
+    ports:
+      - "5432:5432"

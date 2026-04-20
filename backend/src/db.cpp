@@ -5,6 +5,11 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <vector>
+#include <unordered_map>
+#include <queue>
+#include <limits>
+#include <cmath>
+#include <climits>
 
 static PGconn* g_conn = nullptr;
 
@@ -298,4 +303,169 @@ std::vector<StudentAssignmentRow> DB::getAssignmentsForStudent(int studentId) {
 
     PQclear(res);
     return rows;
+}
+
+// ============================================================================
+// Travel Algorithm Database Functions
+// ============================================================================
+
+std::vector<TravelLocation> DB::getAllCampusLocations() {
+    std::vector<TravelLocation> locations;
+    if (!g_conn) return locations;
+
+    PGresult* res = PQexec(g_conn, "SELECT id, location_code, location_name FROM campus_locations WHERE is_active = true ORDER BY location_name");
+
+    if (!res) return locations;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return locations;
+    }
+
+    int tupleCount = PQntuples(res);
+    for (int i = 0; i < tupleCount; ++i) {
+        TravelLocation loc;
+        loc.id = std::atoi(PQgetvalue(res, i, 0));
+        loc.code = PQgetvalue(res, i, 1);
+        loc.name = PQgetvalue(res, i, 2);
+        locations.push_back(loc);
+    }
+
+    PQclear(res);
+    return locations;
+}
+
+std::vector<TravelPath> DB::getAllCampusPaths() {
+    std::vector<TravelPath> paths;
+    if (!g_conn) return paths;
+
+    PGresult* res = PQexec(g_conn, "SELECT from_location_id, to_location_id, distance_meters FROM campus_paths ORDER BY from_location_id, to_location_id");
+
+    if (!res) return paths;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return paths;
+    }
+
+    int tupleCount = PQntuples(res);
+    for (int i = 0; i < tupleCount; ++i) {
+        TravelPath path;
+        path.from_id = std::atoi(PQgetvalue(res, i, 0));
+        path.to_id = std::atoi(PQgetvalue(res, i, 1));
+        path.distance_meters = std::atoi(PQgetvalue(res, i, 2));
+        paths.push_back(path);
+    }
+
+    PQclear(res);
+    return paths;
+}
+
+std::optional<TravelLocation> DB::getLocationByCode(const std::string& code) {
+    if (!g_conn) return std::nullopt;
+
+    const char* paramValues[1] = { code.c_str() };
+    PGresult* res = PQexecParams(g_conn,
+        "SELECT id, location_code, location_name FROM campus_locations WHERE location_code = $1 AND is_active = true",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (!res) return std::nullopt;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1) {
+        PQclear(res);
+        return std::nullopt;
+    }
+
+    TravelLocation loc;
+    loc.id = std::atoi(PQgetvalue(res, 0, 0));
+    loc.code = PQgetvalue(res, 0, 1);
+    loc.name = PQgetvalue(res, 0, 2);
+
+    PQclear(res);
+    return loc;
+}
+
+TravelRoute DB::calculateTravelRoute(const std::string& fromCode, const std::string& toCode) {
+    TravelRoute result;
+    result.found = false;
+
+    auto fromLoc = getLocationByCode(fromCode);
+    auto toLoc = getLocationByCode(toCode);
+
+    if (!fromLoc || !toLoc) {
+        return result;
+    }
+
+    result.from_location_id = fromLoc->id;
+    result.to_location_id = toLoc->id;
+
+    if (fromLoc->id == toLoc->id) {
+        result.distance_meters = 0;
+        result.travel_time_minutes = 0;
+        result.found = true;
+        result.path = {fromLoc->id};
+        return result;
+    }
+
+    // Get all locations and paths to build the graph
+    auto locations = getAllCampusLocations();
+    auto paths = getAllCampusPaths();
+
+    // Build adjacency list
+    std::unordered_map<int, std::vector<std::pair<int, int>>> adjacency;
+    for (const auto& loc : locations) {
+        adjacency[loc.id] = std::vector<std::pair<int, int>>();
+    }
+    for (const auto& path : paths) {
+        adjacency[path.from_id].push_back({path.to_id, path.distance_meters});
+        adjacency[path.to_id].push_back({path.from_id, path.distance_meters});
+    }
+
+    // Dijkstra's algorithm
+    std::unordered_map<int, int> distances;
+    std::unordered_map<int, int> previous;
+    std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, std::greater<std::pair<int, int>>> pq;
+
+    for (const auto& loc : locations) {
+        distances[loc.id] = INT_MAX;
+        previous[loc.id] = -1;
+    }
+
+    distances[fromLoc->id] = 0;
+    pq.push({0, fromLoc->id});
+
+    while (!pq.empty()) {
+        auto [dist, current] = pq.top();
+        pq.pop();
+
+        if (dist > distances[current]) continue;
+
+        for (const auto& [neighbor, weight] : adjacency[current]) {
+            int newDist = dist + weight;
+            if (newDist < distances[neighbor]) {
+                distances[neighbor] = newDist;
+                previous[neighbor] = current;
+                pq.push({newDist, neighbor});
+            }
+        }
+    }
+
+    if (distances[toLoc->id] == INT_MAX) {
+        return result; // No path found
+    }
+
+    // Reconstruct path
+    result.distance_meters = distances[toLoc->id];
+    result.found = true;
+
+    // Calculate travel time (walking speed: 1.4 m/s, plus 2 min transition time)
+    double travelSeconds = result.distance_meters / 1.4;
+    double totalSeconds = travelSeconds + 120; // 2 minutes transition time
+    result.travel_time_minutes = std::ceil(totalSeconds / 60.0);
+
+    // Build path
+    int current = toLoc->id;
+    while (current != -1) {
+        result.path.insert(result.path.begin(), current);
+        current = previous[current];
+    }
+
+    return result;
 }

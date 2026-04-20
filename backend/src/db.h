@@ -35,6 +35,27 @@ struct StudentAssignmentRow {
     bool completed;
 };
 
+struct TravelLocation {
+    int id;
+    std::string code;
+    std::string name;
+};
+
+struct TravelPath {
+    int from_id;
+    int to_id;
+    int distance_meters;
+};
+
+struct TravelRoute {
+    int from_location_id;
+    int to_location_id;
+    int distance_meters;
+    int travel_time_minutes;
+    std::vector<int> path;
+    bool found;
+};
+
 namespace DB {
     bool init(const std::string& conninfo);
     std::optional<UserRow> findUserByEmail(const std::string& email);
@@ -48,10 +69,15 @@ namespace DB {
 
     // Historical completion tracking
     bool recordAssignmentCompletion(int studentId, int assignmentId, double actualHours);
+
+    // Travel algorithm functions
+    std::vector<TravelLocation> getAllCampusLocations();
+    std::vector<TravelPath> getAllCampusPaths();
+    std::optional<TravelLocation> getLocationByCode(const std::string& code);
+    TravelRoute calculateTravelRoute(const std::string& fromCode, const std::string& toCode);
     std::vector<CompletionRecord> getCompletionHistory(int studentId);
 
     // Predictions based on history
     double getStudentAvgForType(int studentId, int assignmentTypeId);
     std::vector<StudentAssignmentRow> getAssignmentsForStudent(int studentId);
 }
-

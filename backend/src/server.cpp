@@ -377,6 +377,57 @@ Pistache::Rest::Routes::Get(router, "/assignments", [&](const Rest::Request req,
     res.send(Http::Code::Ok, response, MIME(Application, Json));
     return Pistache::Rest::Route::Result::Ok;
 });
+
+// TRAVEL ENDPOINTS
+
+// GET /travel/locations - Get all campus locations
+Pistache::Rest::Routes::Get(router, "/travel/locations", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto locations = DB::getAllCampusLocations();
+
+    picojson::array arr;
+    for (const auto& loc : locations) {
+        picojson::object o;
+        o["id"] = picojson::value((double)loc.id);
+        o["code"] = picojson::value(loc.code);
+        o["name"] = picojson::value(loc.name);
+        arr.push_back(picojson::value(o));
+    }
+    std::string response = picojson::value(arr).serialize();
+    res.send(Http::Code::Ok, response, MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
+// POST /travel/calculate - Calculate travel route between locations
+Pistache::Rest::Routes::Post(router, "/travel/calculate", [&](const Rest::Request req, Http::ResponseWriter res) {
+    auto body = req.body();
+    std::string fromCode = parseJsonField(body, "from_code");
+    std::string toCode = parseJsonField(body, "to_code");
+
+    if (fromCode.empty() || toCode.empty()) {
+        res.send(Http::Code::Bad_Request, "from_code and to_code required");
+        return Pistache::Rest::Route::Result::Failure;
+    }
+
+    auto route = DB::calculateTravelRoute(fromCode, toCode);
+
+    picojson::object response;
+    response["from_location_id"] = picojson::value((double)route.from_location_id);
+    response["to_location_id"] = picojson::value((double)route.to_location_id);
+    response["distance_meters"] = picojson::value((double)route.distance_meters);
+    response["travel_time_minutes"] = picojson::value((double)route.travel_time_minutes);
+    response["found"] = picojson::value(route.found);
+
+    picojson::array pathArr;
+    for (int locId : route.path) {
+        pathArr.push_back(picojson::value((double)locId));
+    }
+    response["path"] = picojson::value(pathArr);
+
+    std::string jsonResponse = picojson::value(response).serialize();
+    res.send(Http::Code::Ok, jsonResponse, MIME(Application, Json));
+    return Pistache::Rest::Route::Result::Ok;
+});
+
   server.setHandler(router.handler());
   server.serve();
   server.shutdown();
