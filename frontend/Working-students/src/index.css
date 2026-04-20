@@ -1,11 +1,18 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+ 
+  --bg-1: #f6f9fb;
+  --bg-2: #eef6ff;
+  --card-bg: #ffffff;
+  --muted: #6b7280;
+  --accent: #5b8cff;
+  --accent-2: #ff8a80;
+  --glass: rgba(255,255,255,0.6);
+  font-family: Poppins, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: light dark;
-  color: rgba(0, 0, 0, 0.87);
-  background-color: #242424;
+  color: rgba(20, 25, 30, 0.95);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -24,17 +31,18 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 520px;
+
+  background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 100%);
+  min-width: 360px;
   min-height: 100vh;
+  color: var(--muted);
 }
 
 h1, h2 {
   font-size: 2rem;
   font-weight: 600;
   margin-bottom: 1rem;
-  color: #ff3c3c; /* red */
+  color: #ff3c3c;
 }
 
 input {

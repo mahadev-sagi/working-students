@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { apiUrl } from './api';
 import './App.css';
 import HomePage from './HomePage';
+import Assignments from './Assignments';
+import Events from './Events';
+import WorkSchedule from './WorkSchedule';
 import AdminPage from './AdminPage';
 
 function App() {
@@ -69,7 +72,7 @@ function App() {
         setError(errorMessage);
         return;
       }
-      // After successful signup, log the user in
+
       await handleLogin();
     } catch (error) {
       setError('An error occurred during signup. Please try again.');
@@ -80,9 +83,20 @@ function App() {
     setUser(null);
     setToken(null);
     setPage('login');
+    window.history.pushState({}, '', '/');
+    setPath('/');
   };
 
-  return (
+  
+  const [path, setPath] = useState(window.location.pathname || '/');
+
+  useEffect(() => {
+    const onPop = () => setPath(window.location.pathname || '/');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+   return (
     <main className="page">
       {user ? (
         page === 'admin' ? (
