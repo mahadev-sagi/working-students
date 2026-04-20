@@ -10,6 +10,42 @@ struct UserRow {
     std::string password_hash;
 };
 
+struct AssignmentTypeRow {
+    int id;
+    std::string type_name;
+    int avg_completion_hours;
+};
+
+struct AdminClassRow {
+    int id;
+    std::string class_name;
+    std::string course_code;
+    std::string building;
+    std::string room_number;
+    std::string start_time;
+    std::string end_time;
+    std::string days_of_week;
+    int enrollment_count;
+};
+
+struct AdminAssignmentRow {
+    int id;
+    int class_id;
+    int assignment_type_id;
+    std::string title;
+    std::string description;
+    std::string type_name;
+    int assignment_time_prediction;
+    std::string due_date;
+    std::string due_time;
+};
+
+struct AdminRosterStudentRow {
+    int id;
+    std::string name;
+    std::string email;
+};
+
 struct AssignmentHoursByType {
     std::string assignment_type;
     int assignment_count;
@@ -58,6 +94,8 @@ struct TravelRoute {
 
 namespace DB {
     bool init(const std::string& conninfo);
+    std::optional<UserRow> findAdminByEmail(const std::string& email);
+    std::optional<UserRow> findAdminById(int id);
     std::optional<UserRow> findUserByEmail(const std::string& email);
     std::optional<UserRow> findUserById(int id);
     bool setUserPassword(const std::string& email, const std::string& password_hash);
@@ -80,4 +118,44 @@ namespace DB {
     // Predictions based on history
     double getStudentAvgForType(int studentId, int assignmentTypeId);
     std::vector<StudentAssignmentRow> getAssignmentsForStudent(int studentId);
+
+    // Admin functionality
+    std::vector<AdminClassRow> getClassesForAdmin(int adminId);
+    std::vector<AssignmentTypeRow> getAssignmentTypes();
+    std::optional<int> createClassForAdmin(
+        int adminId,
+        const std::string& className,
+        const std::string& courseCode,
+        const std::string& building,
+        const std::string& roomNumber,
+        const std::string& startTime,
+        const std::string& endTime,
+        const std::string& daysOfWeek
+    );
+    bool adminOwnsClass(int adminId, int classId);
+    int enrollStudentsInClassByEmails(int classId, const std::vector<std::string>& emails);
+    bool createAssignmentForClass(
+        int adminId,
+        int classId,
+        int assignmentTypeId,
+        const std::string& title,
+        const std::string& description,
+        const std::string& dueDate,
+        const std::string& dueTime,
+        int assignmentTimePrediction
+    );
+    std::vector<AdminAssignmentRow> getAssignmentsForAdminClass(int adminId, int classId);
+    bool updateAssignmentForAdmin(
+        int adminId,
+        int assignmentId,
+        int classId,
+        int assignmentTypeId,
+        const std::string& title,
+        const std::string& description,
+        const std::string& dueDate,
+        const std::string& dueTime,
+        int assignmentTimePrediction
+    );
+    std::vector<AdminRosterStudentRow> getRosterForAdminClass(int adminId, int classId);
+    bool addStudentToAdminClass(int adminId, int classId, const std::string& name, const std::string& email);
 }

@@ -7,6 +7,7 @@
 struct AuthResult {
     bool success;
     std::string token;
+    std::string role;
     std::string error;
 };
 
