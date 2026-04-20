@@ -230,8 +230,27 @@ bool DB::recordAssignmentCompletion(int studentId, int assignmentId, double actu
     if (!res) return false;
     bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
     PQclear(res);
+
+    // If completion was recorded successfully, update the prediction based on history
+    if (ok) {
+        const char* typeParams[1] = { aidStr.c_str() };
+        PGresult* typeRes = PQexecParams(g_conn,
+            "SELECT assignment_type_id FROM assignments WHERE id = $1",
+            1, nullptr, typeParams, nullptr, nullptr, 0);
+        
+        if (typeRes && PQresultStatus(typeRes) == PGRES_TUPLES_OK && PQntuples(typeRes) == 1) {
+            int assignmentTypeId = std::atoi(PQgetvalue(typeRes, 0, 0));
+            PQclear(typeRes);
+            // Update prediction based on historical data
+            updatePredictionBasedOnHistory(assignmentId, assignmentTypeId);
+        } else if (typeRes) {
+            PQclear(typeRes);
+        }
+    }
+    
     return ok;
 }
+
 
 std::vector<CompletionRecord> DB::getCompletionHistory(int studentId) {
     std::vector<CompletionRecord> records;
@@ -271,6 +290,50 @@ std::vector<CompletionRecord> DB::getCompletionHistory(int studentId) {
 
     PQclear(res);
     return records;
+}
+
+bool DB::updatePredictionBasedOnHistory(int assignmentId, int assignmentTypeId) {
+    if (!g_conn) return false;
+
+    // Calculate the average completion time for all students who completed 
+    // assignments of this type
+    std::string assignmentIdStr = std::to_string(assignmentId);
+    std::string assignmentTypeIdStr = std::to_string(assignmentTypeId);
+    
+    const char* paramValues[2] = { assignmentTypeIdStr.c_str(), assignmentIdStr.c_str() };
+    
+    // Get average completion time across all students for this assignment type
+    PGresult* res = PQexecParams(g_conn,
+        "SELECT COALESCE(ROUND(AVG(sa.actual_completion_hours)::NUMERIC, 1), 0)::INTEGER "
+        "FROM student_assignments sa "
+        "JOIN assignments a ON a.id = sa.assignment_id "
+        "WHERE a.assignment_type_id = $1 AND sa.actual_completion_hours > 0",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (!res) return false;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1) {
+        PQclear(res);
+        return false;
+    }
+
+    int avgHours = std::atoi(PQgetvalue(res, 0, 0));
+    PQclear(res);
+
+    // Only update if we have a valid average (greater than 0)
+    if (avgHours <= 0) return true;
+
+    // Update the assignment_time_prediction with the calculated average
+    std::string avgHoursStr = std::to_string(avgHours);
+    const char* updateParams[2] = { avgHoursStr.c_str(), assignmentIdStr.c_str() };
+    
+    PGresult* updateRes = PQexecParams(g_conn,
+        "UPDATE assignments SET assignment_time_prediction = $1 WHERE id = $2",
+        2, nullptr, updateParams, nullptr, nullptr, 0);
+
+    if (!updateRes) return false;
+    bool ok = PQresultStatus(updateRes) == PGRES_COMMAND_OK;
+    PQclear(updateRes);
+    return ok;
 }
 
 double DB::getStudentAvgForType(int studentId, int assignmentTypeId) {

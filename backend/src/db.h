@@ -126,6 +126,7 @@ namespace DB {
 
     // Historical completion tracking
     bool recordAssignmentCompletion(int studentId, int assignmentId, double actualHours);
+    bool updatePredictionBasedOnHistory(int assignmentId, int assignmentTypeId);
 
     // Travel algorithm functions
     std::vector<TravelLocation> getAllCampusLocations();
