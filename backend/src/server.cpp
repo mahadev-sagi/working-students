@@ -123,28 +123,19 @@ fprintf(stderr, "Connecting to database at %s:%s/%s (ssl=%s)...\n",
             // Debug: print parsed email and password
             fprintf(stderr, "[DEBUG] Parsed email: %s\n", email.c_str());
             fprintf(stderr, "[DEBUG] Parsed password: %s\n", password.c_str());
-
-              auto userOpt = DB::findUserByEmail(email);
-              if (!userOpt) {
-                  res.send(Http::Code::Unauthorized, "Invalid credentials");
-                  return Pistache::Rest::Route::Result::Failure;
-              }
-              auto user = *userOpt;
-              if (user.password_hash.empty()) {
-                  res.send(Http::Code::Forbidden, "Password not set");
-                  return Pistache::Rest::Route::Result::Failure;
-              }
               // Pass the actual request body to Auth::loginFromJson
               auto result = Auth::loginFromJson(body);
               if (!result.success) {
-                  if (result.error.rfind("Internal server error", 0) == 0) {
+                  if (result.error == "Password not set") {
+                      res.send(Http::Code::Forbidden, result.error);
+                  } else if (result.error.rfind("Internal server error", 0) == 0) {
                       res.send(Http::Code::Internal_Server_Error, result.error);
                   } else {
                       res.send(Http::Code::Unauthorized, result.error);
                   }
                   return Pistache::Rest::Route::Result::Failure;
               }
-              std::string response = std::string("{\"token\":\"") + result.token + "\"}";
+              std::string response = std::string("{\"token\":\"") + result.token + "\",\"role\":\"" + result.role + "\"}";
               res.send(Http::Code::Ok, response, MIME(Application, Json));
               return Pistache::Rest::Route::Result::Ok;
   });

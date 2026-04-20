@@ -94,31 +94,52 @@ AuthResult Auth::loginFromJson(const std::string& body) {
     picojson::value v;
     std::string err = picojson::parse(v, body);
     if (!err.empty() || !v.is<picojson::object>()) {
-        return {false, "", "Invalid JSON"};
+        return {false, "", "", "Invalid JSON"};
     }
     const auto& obj = v.get<picojson::object>();
     auto emailIt = obj.find("email");
     auto passIt = obj.find("password");
     if (emailIt == obj.end() || !emailIt->second.is<std::string>() ||
         passIt == obj.end() || !passIt->second.is<std::string>()) {
-        return {false, "", "email and password are required"};
+        return {false, "", "", "email and password are required"};
     }
     std::string email = emailIt->second.get<std::string>();
     std::string password = passIt->second.get<std::string>();
 
+    auto adminOpt = DB::findAdminByEmail(email);
+    if (adminOpt) {
+        auto admin = *adminOpt;
+        int bcrypt_result = bcrypt_checkpw(password.c_str(), admin.password_hash.c_str());
+        if (bcrypt_result != 0) {
+            return {false, "", "", "Invalid credentials"};
+        }
+
+        try {
+            auto token = createJwtToken(admin.id);
+            return AuthResult{true, token, "admin", ""};
+        } catch (const std::exception&) {
+            return {false, "", "", "Internal server error: could not create token"};
+        } catch (...) {
+            return {false, "", "", "Internal server error: unknown token error"};
+        }
+    }
+
     auto userOpt = DB::findUserByEmail(email);
     if (!userOpt) {
-        return {false, "", "Invalid credentials"};
+        return {false, "", "", "Invalid credentials"};
     }
 
     auto user = *userOpt;
+    if (user.password_hash.empty()) {
+        return {false, "", "", "Password not set"};
+    }
 
     fprintf(stderr, "[DEBUG] Login attempt: email=%s password=%s\n", email.c_str(), password.c_str());
     fprintf(stderr, "[DEBUG] Stored hash: %s\n", user.password_hash.c_str());
     int bcrypt_result = bcrypt_checkpw(password.c_str(), user.password_hash.c_str());
     fprintf(stderr, "[DEBUG] bcrypt_checkpw result: %d\n", bcrypt_result);
     if (bcrypt_result != 0) {
-        return {false, "", "Invalid credentials"};
+        return {false, "", "", "Invalid credentials"};
     }
 
     try {
@@ -126,13 +147,13 @@ AuthResult Auth::loginFromJson(const std::string& body) {
         auto token = createJwtToken(user.id);
 
         fprintf(stderr, "[DEBUG] JWT created successfully, length=%zu\n", token.size());
-        return AuthResult{true, token, ""};
+        return AuthResult{true, token, "student", ""};
     } catch (const std::exception& e) {
         fprintf(stderr, "[ERROR] JWT creation failed with std::exception: %s\n", e.what());
-        return {false, "", "Internal server error: could not create token"};
+        return {false, "", "", "Internal server error: could not create token"};
     } catch (...) {
         fprintf(stderr, "[ERROR] An unknown error occurred during JWT creation.\n");
-        return {false, "", "Internal server error: unknown token error"};
+        return {false, "", "", "Internal server error: unknown token error"};
     }
 }
 

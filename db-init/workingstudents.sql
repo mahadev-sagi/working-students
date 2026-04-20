@@ -34,6 +34,11 @@ CREATE TABLE admin_users (
     email TEXT UNIQUE,
     password_hash TEXT NOT NULL
 );
+
+INSERT INTO admin_users (name, email, password_hash)
+VALUES
+('Admin Test', 'admin_test@ufl.edu', '$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi'),
+('Course Admin', 'course_admin@ufl.edu', '$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi');
 -- CLASSES
 
 CREATE TABLE classes (

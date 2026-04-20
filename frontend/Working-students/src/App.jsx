@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { apiUrl } from './api';
 import './App.css';
 import HomePage from './HomePage';
+import AdminPage from './AdminPage';
 
 function App() {
  
@@ -40,8 +41,8 @@ function App() {
       }
       const data = await response.json();
       setToken(data.token);
-      setUser({ email });
-      setPage('homepage');
+      setUser({ email, role: data.role || 'student' });
+      setPage(data.role === 'admin' ? 'admin' : 'homepage');
     } catch (error) {
       setError('An error occurred during login. Please try again.');
     }
@@ -84,7 +85,11 @@ function App() {
   return (
     <main className="page">
       {user ? (
-        <HomePage user={user} token={token} onLogout={handleLogout} />
+        page === 'admin' ? (
+          <AdminPage user={user} token={token} onLogout={handleLogout} />
+        ) : (
+          <HomePage user={user} token={token} onLogout={handleLogout} />
+        )
       ) : page === 'signup' ? (
         <section className="home-card">
           <h1>Working Students - Sign Up</h1>
