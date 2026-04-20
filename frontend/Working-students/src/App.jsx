@@ -15,6 +15,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [error, setError] = useState('');
+  const [path, setPath] = useState(window.location.pathname || '/');
 
   const handleLogin = async () => {
     if (email.trim() === '' || password.trim() === '') {
@@ -45,7 +46,13 @@ function App() {
       const data = await response.json();
       setToken(data.token);
       setUser({ email, role: data.role || 'student' });
-      setPage(data.role === 'admin' ? 'admin' : 'homepage');
+      if (data.role === 'admin') {
+        setPage('admin');
+      } else {
+        window.history.pushState({}, '', '/');
+        setPath('/');
+        setPage('homepage');
+      }
     } catch (error) {
       setError('An error occurred during login. Please try again.');
     }
@@ -87,14 +94,24 @@ function App() {
     setPath('/');
   };
 
-  
-  const [path, setPath] = useState(window.location.pathname || '/');
-
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname || '/');
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  const renderStudentPage = () => {
+    if (path === '/assignments') {
+      return <Assignments token={token} />;
+    }
+    if (path === '/events') {
+      return <Events />;
+    }
+    if (path === '/work-schedule') {
+      return <WorkSchedule />;
+    }
+    return <HomePage user={user} token={token} onLogout={handleLogout} />;
+  };
 
    return (
     <main className="page">
@@ -102,7 +119,7 @@ function App() {
         page === 'admin' ? (
           <AdminPage user={user} token={token} onLogout={handleLogout} />
         ) : (
-          <HomePage user={user} token={token} onLogout={handleLogout} />
+          renderStudentPage()
         )
       ) : page === 'signup' ? (
         <section className="home-card">

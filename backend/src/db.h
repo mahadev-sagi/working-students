@@ -71,6 +71,25 @@ struct StudentAssignmentRow {
     bool completed;
 };
 
+struct StudentClassScheduleRow {
+    int class_id;
+    std::string class_name;
+    std::string course_code;
+    std::string building;
+    std::string room_number;
+    std::string start_time;
+    std::string end_time;
+    std::string days_of_week;
+};
+
+struct StudentShiftRow {
+    int shift_id;
+    std::string day_of_week;
+    std::string start_time;
+    std::string end_time;
+    std::string location;
+};
+
 struct TravelLocation {
     int id;
     std::string code;
@@ -118,6 +137,8 @@ namespace DB {
     // Predictions based on history
     double getStudentAvgForType(int studentId, int assignmentTypeId);
     std::vector<StudentAssignmentRow> getAssignmentsForStudent(int studentId);
+    std::vector<StudentClassScheduleRow> getClassesForStudent(int studentId);
+    std::vector<StudentShiftRow> getShiftsForStudent(int studentId);
 
     // Admin functionality
     std::vector<AdminClassRow> getClassesForAdmin(int adminId);

@@ -136,33 +136,26 @@
 }
 
 
-.home-layout {
-  display: flex;
-  justify-content: flex-start; 
-  align-items: flex-start; 
-  padding: 20px;
-  gap: 24px;
-  width: 100%;
-}
-
-@media (max-width: 640px) {
-  .home-layout {
-    padding: 12px;
-    gap: 12px;
-    flex-direction: column;
-  }
-  .sidebar {
-    width: 100%;
-  }
-}
-
 .notes-container {
   width: 320px;
   border: 2px solid #ddd;
   border-radius: 10px;
   padding: 12px;
   background: #fff;
-  height: fit-content;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.notes-container h3 {
+  margin: 0 0 12px 0;
+}
+
+.notes-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .note-empty {
@@ -214,5 +207,206 @@
 
 .note-button:hover {
   background: #eee;
+}
+
+.below-calendar-layout {
+  --panel-height: 430px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  padding: 20px;
+  background: #fff;
+  border-top: 1px solid #eee;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sidebar-buttons-container {
+  width: 100%;
+}
+
+.sidebar-buttons-container .sidebar {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-buttons-container .sidebar-item {
+  flex: 1;
+  margin-bottom: 0;
+  min-height: 0;
+  font-size: 26px;
+}
+
+.assignments-widget-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sidebar-buttons-container,
+.notes-container,
+.assignments-widget-container {
+  width: 100%;
+  height: var(--panel-height);
+}
+
+.assignments-widget-container h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.assignment-empty {
+  color: #999;
+    font-size: 14px;
+  font-style: italic;
+  padding: 16px;
+  text-align: center;
+}
+
+.assignments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.assignment-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  flex-shrink: 0;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.assignment-draggable {
+  cursor: grab;
+}
+
+.assignment-draggable:active {
+  cursor: grabbing;
+}
+
+.assignment-item:last-child {
+  border-bottom: none;
+}
+
+.assignment-complete {
+  background: #daf5e1;
+  border-left: 4px solid #2f9e44;
+}
+
+.assignment-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.assignment-title {
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.assignment-meta {
+  font-size: 12px;
+  color: #999;
+  margin-top: 2px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.assignment-due {
+  color: #222;
+}
+
+.assignment-predicted {
+  align-self: center;
+  min-width: 72px;
+  text-align: right;
+  color: #222;
+  font-size: 13px;
+}
+
+.assignment-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.assignment-toggle {
+  border: none;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  color: #fff;
+}
+
+.assignment-complete-button {
+  background: #2f9e44;
+}
+
+.assignment-reopen {
+  background: #3867d6;
+}
+
+@media (max-width: 1100px) {
+  .sidebar-buttons-container,
+  .notes-container,
+  .assignments-widget-container {
+    height: auto;
+  }
+
+  .assignments-list,
+  .notes-list {
+    max-height: 360px;
+  }
+
+  .below-calendar-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .below-calendar-layout {
+    padding: 12px;
+    gap: 12px;
+    flex-direction: column;
+  }
+
+  .notes-container,
+  .sidebar,
+  .assignments-widget-container {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    height: auto;
+  }
+
+  .notes-list,
+  .assignments-list {
+    max-height: 300px;
+  }
 }
 

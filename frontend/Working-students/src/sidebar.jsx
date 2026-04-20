@@ -4,10 +4,8 @@ import { useRef, useState, useEffect } from "react";
 export default function EventSidebar({ events, onAddNote }) {
   const containerRef = useRef(null);
   const popupRef = useRef(null);
-  const elRefs = useRef([]);
 
   const [selectedId, setSelectedId] = useState(null);
-  const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
   const [details, setDetails] = useState({});
   const [editingText, setEditingText] = useState("");
 
@@ -33,9 +31,8 @@ export default function EventSidebar({ events, onAddNote }) {
     };
   }, []);
 
-  const onClickItem = (eventObj, idx) => {
-    const el = elRefs.current[idx];
-    if (!el || !containerRef.current) return;
+  const onClickItem = (eventObj) => {
+    if (!containerRef.current) return;
 
     if (eventObj.name === "Assignments") {
       window.history.pushState({}, "", "/assignments");
@@ -53,10 +50,6 @@ export default function EventSidebar({ events, onAddNote }) {
       return;
     }
 
-    const top = el.offsetTop;
-    const left = el.offsetLeft + el.offsetWidth + 8;
-
-    setPopupPos({ top, left });
     setSelectedId(eventObj.id);
     setEditingText(details[eventObj.id] || "");
   };
@@ -81,26 +74,19 @@ export default function EventSidebar({ events, onAddNote }) {
 
   return (
     <div className="sidebar" ref={containerRef}>
-      <h3 className="sidebar-title">Events</h3>
-
       {events.map((event, idx) => (
         <div
           key={event.id}
-          ref={(el) => (elRefs.current[idx] = el)}
           className="sidebar-item"
           style={{ backgroundColor: event.color }}
-          onClick={() => onClickItem(event, idx)}
+          onClick={() => onClickItem(event)}
         >
           {event.name}
         </div>
       ))}
 
       {selectedId != null && (
-        <div
-          className="sidebar-popup"
-          ref={popupRef}
-          style={{ top: popupPos.top + "px", left: popupPos.left + "px" }}
-        >
+        <div className="sidebar-popup" ref={popupRef}>
           <div className="popup-header">
             <strong>
               {events.find((e) => e.id === selectedId)?.name || "Details"}

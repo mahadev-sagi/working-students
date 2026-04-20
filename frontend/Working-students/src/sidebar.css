@@ -40,12 +40,15 @@
 
 .sidebar-popup {
   position: absolute;
-  width: 300px;
+  left: 100%;
+  bottom: 0;
+  width: 380px;
+  max-width: min(52vw, 460px);
   background: var(--card-bg, #fff);
   border: 1px solid rgba(16,24,40,0.06);
   box-shadow: 0 10px 30px rgba(16,24,40,0.08);
   border-radius: 10px;
-  padding: 10px;
+  padding: 14px;
   z-index: 60;
   animation: popupFade 160ms ease;
 }
@@ -57,12 +60,23 @@
 
 .popup-textarea {
   width: 100%;
-  min-height: 90px;
+  min-height: 170px;
   resize: vertical;
   padding: 8px;
   border-radius: 8px;
   border: 1px solid rgba(16,24,40,0.08);
   font-family: inherit;
+}
+
+@media (max-width: 1100px) {
+  .sidebar-popup {
+    left: 0;
+    right: 0;
+    bottom: auto;
+    top: calc(100% + 8px);
+    width: auto;
+    max-width: none;
+  }
 }
 
 .popup-actions {

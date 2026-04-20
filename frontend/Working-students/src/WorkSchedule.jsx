@@ -7,10 +7,7 @@ export default function WorkSchedule() {
   const readStored = () => {
     try {
       const raw = localStorage.getItem("workShifts");
-      if (!raw) return [
-        { id: 1, day: "Mon", time: "09:00 - 13:00", place: "Library" },
-        { id: 2, day: "Wed", time: "14:00 - 18:00", place: "Cafe" },
-      ];
+      if (!raw) return [];
       return JSON.parse(raw);
     } catch (e) {
       console.warn("Failed to read workShifts", e);

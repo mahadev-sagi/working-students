@@ -178,6 +178,16 @@ int main() {
         res.send(Http::Code::Ok);
         return Rest::Route::Result::Ok;
     });
+    Pistache::Rest::Routes::Options(router, "/classes", [](const Rest::Request req, Http::ResponseWriter res) {
+        addCorsHeaders(res);
+        res.send(Http::Code::Ok);
+        return Rest::Route::Result::Ok;
+    });
+    Pistache::Rest::Routes::Options(router, "/shifts", [](const Rest::Request req, Http::ResponseWriter res) {
+        addCorsHeaders(res);
+        res.send(Http::Code::Ok);
+        return Rest::Route::Result::Ok;
+    });
     Pistache::Rest::Routes::Options(router, "/travel/locations", [](const Rest::Request req, Http::ResponseWriter res) {
         res.headers().add<Http::Header::AccessControlAllowOrigin>("https://working-students.vercel.app");
         res.headers().add<Http::Header::AccessControlAllowMethods>("GET, POST, PUT, DELETE, OPTIONS");
@@ -385,7 +395,7 @@ int main() {
         }
 
         auto existing = DB::findUserByEmail(email);
-        if (existing) {
+        if (existing && !existing->password_hash.empty()) {
             res.send(Http::Code::Conflict, "User already exists");
             return Pistache::Rest::Route::Result::Failure;
         }
@@ -401,9 +411,19 @@ int main() {
             return Pistache::Rest::Route::Result::Failure;
         }
 
-        if (!DB::createUser(email, std::string(hash))) {
-            res.send(Http::Code::Internal_Server_Error, "Failed to create user");
-            return Pistache::Rest::Route::Result::Failure;
+        bool ok = false;
+        if (existing) {
+            ok = DB::setUserPassword(email, std::string(hash));
+            if (!ok) {
+                res.send(Http::Code::Internal_Server_Error, "Failed to set user password");
+                return Pistache::Rest::Route::Result::Failure;
+            }
+        } else {
+            ok = DB::createUser(email, std::string(hash));
+            if (!ok) {
+                res.send(Http::Code::Internal_Server_Error, "Failed to create user");
+                return Pistache::Rest::Route::Result::Failure;
+            }
         }
 
         res.send(Http::Code::Ok, R"({"message":"Signup successful"})", MIME(Application, Json));
@@ -550,6 +570,85 @@ int main() {
         }
         std::string response = picojson::value(arr).serialize();
         res.send(Http::Code::Ok, response, MIME(Application, Json));
+        return Pistache::Rest::Route::Result::Ok;
+    });
+
+    // ==================== GET ENROLLED CLASSES ====================
+    Pistache::Rest::Routes::Get(router, "/classes", [&](const Rest::Request req, Http::ResponseWriter res) {
+        addCorsHeaders(res);
+        auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+        if (!authHeader) {
+            res.send(Http::Code::Unauthorized, "Missing Authorization header");
+            return Pistache::Rest::Route::Result::Failure;
+        }
+
+        auto profile = Auth::verifyBearerToken(authHeader->value());
+        if (!profile.success) {
+            res.send(Http::Code::Unauthorized, profile.error);
+            return Pistache::Rest::Route::Result::Failure;
+        }
+
+        int studentId = 0;
+        std::string role;
+        if (!extractIdAndRoleFromProfileJson(profile.user, studentId, role) || role != "student") {
+            res.send(Http::Code::Forbidden, "Student access required");
+            return Pistache::Rest::Route::Result::Failure;
+        }
+
+        auto classes = DB::getClassesForStudent(studentId);
+        picojson::array arr;
+        for (const auto& c : classes) {
+            picojson::object o;
+            o["class_id"] = picojson::value((double)c.class_id);
+            o["class_name"] = picojson::value(c.class_name);
+            o["course_code"] = picojson::value(c.course_code);
+            o["building"] = picojson::value(c.building);
+            o["room_number"] = picojson::value(c.room_number);
+            o["start_time"] = picojson::value(c.start_time);
+            o["end_time"] = picojson::value(c.end_time);
+            o["days_of_week"] = picojson::value(c.days_of_week);
+            arr.push_back(picojson::value(o));
+        }
+
+        res.send(Http::Code::Ok, picojson::value(arr).serialize(), MIME(Application, Json));
+        return Pistache::Rest::Route::Result::Ok;
+    });
+
+    // ==================== GET STUDENT SHIFTS ====================
+    Pistache::Rest::Routes::Get(router, "/shifts", [&](const Rest::Request req, Http::ResponseWriter res) {
+        addCorsHeaders(res);
+        auto authHeader = req.headers().tryGet<Pistache::Http::Header::Authorization>();
+        if (!authHeader) {
+            res.send(Http::Code::Unauthorized, "Missing Authorization header");
+            return Pistache::Rest::Route::Result::Failure;
+        }
+
+        auto profile = Auth::verifyBearerToken(authHeader->value());
+        if (!profile.success) {
+            res.send(Http::Code::Unauthorized, profile.error);
+            return Pistache::Rest::Route::Result::Failure;
+        }
+
+        int studentId = 0;
+        std::string role;
+        if (!extractIdAndRoleFromProfileJson(profile.user, studentId, role) || role != "student") {
+            res.send(Http::Code::Forbidden, "Student access required");
+            return Pistache::Rest::Route::Result::Failure;
+        }
+
+        auto shifts = DB::getShiftsForStudent(studentId);
+        picojson::array arr;
+        for (const auto& s : shifts) {
+            picojson::object o;
+            o["shift_id"] = picojson::value((double)s.shift_id);
+            o["day_of_week"] = picojson::value(s.day_of_week);
+            o["start_time"] = picojson::value(s.start_time);
+            o["end_time"] = picojson::value(s.end_time);
+            o["location"] = picojson::value(s.location);
+            arr.push_back(picojson::value(o));
+        }
+
+        res.send(Http::Code::Ok, picojson::value(arr).serialize(), MIME(Application, Json));
         return Pistache::Rest::Route::Result::Ok;
     });
 

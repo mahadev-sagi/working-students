@@ -1,0 +1,51 @@
+.travel-widget {
+  margin: 0 auto 1rem;
+  width: min(860px, 95%);
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.travel-widget h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+
+.travel-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.5rem;
+}
+
+.travel-controls select,
+.travel-controls button {
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  background: #fff;
+}
+
+.travel-controls button {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.travel-result {
+  margin: 0.6rem 0 0;
+  color: #1b5e20;
+  font-size: 0.95rem;
+}
+
+.travel-error {
+  margin: 0.6rem 0 0;
+  color: #b71c1c;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 720px) {
+  .travel-controls {
+    grid-template-columns: 1fr;
+  }
+}

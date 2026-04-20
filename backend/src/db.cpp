@@ -352,6 +352,83 @@ std::vector<StudentAssignmentRow> DB::getAssignmentsForStudent(int studentId) {
     return rows;
 }
 
+std::vector<StudentClassScheduleRow> DB::getClassesForStudent(int studentId) {
+    std::vector<StudentClassScheduleRow> rows;
+    if (!g_conn) return rows;
+
+    std::string sidStr = std::to_string(studentId);
+    const char* paramValues[1] = { sidStr.c_str() };
+
+    PGresult* res = PQexecParams(g_conn,
+        "SELECT c.id, c.class_name, COALESCE(c.course_code, ''), COALESCE(c.building, ''), "
+        "COALESCE(c.room_number, ''), COALESCE(c.start_time::TEXT, ''), COALESCE(c.end_time::TEXT, ''), COALESCE(c.days_of_week, '') "
+        "FROM enrollments e "
+        "JOIN classes c ON c.id = e.class_id "
+        "WHERE e.student_id = $1 "
+        "ORDER BY c.class_name ASC",
+        1, nullptr, paramValues, nullptr, nullptr, 0
+    );
+
+    if (!res) return rows;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return rows;
+    }
+
+    int tupleCount = PQntuples(res);
+    for (int i = 0; i < tupleCount; ++i) {
+        StudentClassScheduleRow row;
+        row.class_id = std::atoi(PQgetvalue(res, i, 0));
+        row.class_name = PQgetvalue(res, i, 1);
+        row.course_code = PQgetvalue(res, i, 2);
+        row.building = PQgetvalue(res, i, 3);
+        row.room_number = PQgetvalue(res, i, 4);
+        row.start_time = PQgetvalue(res, i, 5);
+        row.end_time = PQgetvalue(res, i, 6);
+        row.days_of_week = PQgetvalue(res, i, 7);
+        rows.push_back(row);
+    }
+
+    PQclear(res);
+    return rows;
+}
+
+std::vector<StudentShiftRow> DB::getShiftsForStudent(int studentId) {
+    std::vector<StudentShiftRow> rows;
+    if (!g_conn) return rows;
+
+    std::string sidStr = std::to_string(studentId);
+    const char* paramValues[1] = { sidStr.c_str() };
+
+    PGresult* res = PQexecParams(g_conn,
+        "SELECT id, COALESCE(day_of_week, ''), COALESCE(start_time::TEXT, ''), COALESCE(end_time::TEXT, ''), COALESCE(location, '') "
+        "FROM shifts "
+        "WHERE student_id = $1 "
+        "ORDER BY id DESC",
+        1, nullptr, paramValues, nullptr, nullptr, 0
+    );
+
+    if (!res) return rows;
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return rows;
+    }
+
+    int tupleCount = PQntuples(res);
+    for (int i = 0; i < tupleCount; ++i) {
+        StudentShiftRow row;
+        row.shift_id = std::atoi(PQgetvalue(res, i, 0));
+        row.day_of_week = PQgetvalue(res, i, 1);
+        row.start_time = PQgetvalue(res, i, 2);
+        row.end_time = PQgetvalue(res, i, 3);
+        row.location = PQgetvalue(res, i, 4);
+        rows.push_back(row);
+    }
+
+    PQclear(res);
+    return rows;
+}
+
 // Travel Algorithm Database Functions
 
 std::vector<TravelLocation> DB::getAllCampusLocations() {
