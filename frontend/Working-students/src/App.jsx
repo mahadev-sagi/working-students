@@ -6,6 +6,7 @@ import Assignments from './Assignments';
 import Events from './Events';
 import WorkSchedule from './WorkSchedule';
 import AdminPage from './AdminPage';
+import TravelTimePage from './TravelTimePage';
 
 function App() {
  
@@ -109,6 +110,9 @@ function App() {
     }
     if (path === '/work-schedule') {
       return <WorkSchedule />;
+    }
+    if (path === '/travel-time') {
+      return <TravelTimePage />;
     }
     return <HomePage user={user} token={token} onLogout={handleLogout} />;
   };

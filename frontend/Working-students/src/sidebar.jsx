@@ -49,6 +49,11 @@ export default function EventSidebar({ events, onAddNote }) {
       window.dispatchEvent(new PopStateEvent("popstate"));
       return;
     }
+    if (eventObj.name === "Travel Time") {
+      window.history.pushState({}, "", "/travel-time");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      return;
+    }
 
     setSelectedId(eventObj.id);
     setEditingText(details[eventObj.id] || "");

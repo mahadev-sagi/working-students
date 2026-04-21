@@ -2,7 +2,6 @@ import WeeklyCalendar from "./calender1";
 import "./HomePage.css";
 import EventSidebar from "./sidebar";
 import "./sidebar.css";
-import TravelWidget from "./TravelWidget";
 import { apiUrl } from "./api";
 import { useState, useEffect, useRef } from "react";
 
@@ -12,6 +11,7 @@ function HomePage({ user, token, onLogout }) {
     { id: 2, name: "Events", color: "#81c784" },
     { id: 3, name: "Work Schedule", color: "#ba68c8" },
     { id: 4, name: "Personal Notes", color: "#64b5f6" },
+    { id: 5, name: "Travel Time", color: "#4db6ac" },
   ];
 
   const [notes, setNotes] = useState([]);
@@ -597,7 +597,6 @@ function HomePage({ user, token, onLogout }) {
 
   return (
     <div>
-      <TravelWidget />
       <header className="home-header">
         <h1 className="site-title">WorkingStudents</h1>
         <div className="welcome-title">Welcome Back!</div>

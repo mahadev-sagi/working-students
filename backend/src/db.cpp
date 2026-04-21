@@ -642,8 +642,7 @@ TravelRoute DB::calculateTravelRoute(const std::string& fromCode, const std::str
 
     // Calculate travel time
     double travelSeconds = result.distance_meters / 1.4;
-    double totalSeconds = travelSeconds + 120;
-    result.travel_time_minutes = std::ceil(totalSeconds / 60.0);
+    result.travel_time_minutes = std::ceil(travelSeconds / 60.0);
 
     // Build path
     int current = toLoc->id;
@@ -653,6 +652,33 @@ TravelRoute DB::calculateTravelRoute(const std::string& fromCode, const std::str
     }
 
     return result;
+}
+
+TravelTrip DB::calculateTravelTrip(const std::vector<std::string>& locationCodes) {
+    TravelTrip trip;
+
+    if (locationCodes.size() < 2) {
+        return trip;
+    }
+
+    trip.found = true;
+    for (size_t i = 0; i + 1 < locationCodes.size(); ++i) {
+        TravelRoute leg = calculateTravelRoute(locationCodes[i], locationCodes[i + 1]);
+        if (!leg.found) {
+            trip.found = false;
+            return trip;
+        }
+
+        trip.distance_meters += leg.distance_meters;
+        trip.travel_time_minutes += leg.travel_time_minutes;
+        if (leg.distance_meters > 0) {
+            trip.transition_buffer_minutes += 2;
+        }
+        trip.legs.push_back(leg);
+    }
+
+    trip.total_trip_time_minutes = trip.travel_time_minutes + trip.transition_buffer_minutes;
+    return trip;
 }
 
 std::vector<AdminClassRow> DB::getClassesForAdmin(int adminId) {

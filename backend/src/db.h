@@ -103,12 +103,21 @@ struct TravelPath {
 };
 
 struct TravelRoute {
-    int from_location_id;
-    int to_location_id;
-    int distance_meters;
-    int travel_time_minutes;
+    int from_location_id = 0;
+    int to_location_id = 0;
+    int distance_meters = 0;
+    int travel_time_minutes = 0;
     std::vector<int> path;
-    bool found;
+    bool found = false;
+};
+
+struct TravelTrip {
+    std::vector<TravelRoute> legs;
+    int distance_meters = 0;
+    int travel_time_minutes = 0;
+    int transition_buffer_minutes = 0;
+    int total_trip_time_minutes = 0;
+    bool found = false;
 };
 
 namespace DB {
@@ -133,6 +142,7 @@ namespace DB {
     std::vector<TravelPath> getAllCampusPaths();
     std::optional<TravelLocation> getLocationByCode(const std::string& code);
     TravelRoute calculateTravelRoute(const std::string& fromCode, const std::string& toCode);
+    TravelTrip calculateTravelTrip(const std::vector<std::string>& locationCodes);
     std::vector<CompletionRecord> getCompletionHistory(int studentId);
 
     // Predictions based on history

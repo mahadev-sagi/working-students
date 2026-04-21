@@ -1187,26 +1187,80 @@ Pistache::Rest::Routes::Post(router, "/admin/classes/roster/add", [&](const Rest
         auto body = req.body();
         std::string fromCode = parseJsonField(body, "from_code");
         std::string toCode = parseJsonField(body, "to_code");
+        std::vector<std::string> locationCodes;
 
-        if (fromCode.empty() || toCode.empty()) {
-            res.send(Http::Code::Bad_Request, "from_code and to_code required");
+        picojson::value v;
+        std::string parseErr = picojson::parse(v, body);
+        if (parseErr.empty() && v.is<picojson::object>()) {
+            const auto& obj = v.get<picojson::object>();
+            auto locationsIt = obj.find("locations");
+            if (locationsIt != obj.end() && locationsIt->second.is<picojson::array>()) {
+                for (const auto& item : locationsIt->second.get<picojson::array>()) {
+                    if (item.is<std::string>()) {
+                        std::string code = trimString(item.get<std::string>());
+                        if (!code.empty()) {
+                            locationCodes.push_back(code);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (locationCodes.empty() && !fromCode.empty() && !toCode.empty()) {
+            locationCodes.push_back(fromCode);
+            locationCodes.push_back(toCode);
+        }
+
+        if (locationCodes.size() < 2) {
+            res.send(Http::Code::Bad_Request, "At least two locations are required");
             return Pistache::Rest::Route::Result::Failure;
         }
 
-        auto route = DB::calculateTravelRoute(fromCode, toCode);
+        auto trip = DB::calculateTravelTrip(locationCodes);
 
         picojson::object response;
-        response["from_location_id"] = picojson::value((double)route.from_location_id);
-        response["to_location_id"] = picojson::value((double)route.to_location_id);
-        response["distance_meters"] = picojson::value((double)route.distance_meters);
-        response["travel_time_minutes"] = picojson::value((double)route.travel_time_minutes);
-        response["found"] = picojson::value(route.found);
+        response["distance_meters"] = picojson::value((double)trip.distance_meters);
+        response["travel_time_minutes"] = picojson::value((double)trip.travel_time_minutes);
+        response["transition_buffer_minutes"] = picojson::value((double)trip.transition_buffer_minutes);
+        response["total_trip_time_minutes"] = picojson::value((double)trip.total_trip_time_minutes);
+        response["found"] = picojson::value(trip.found);
 
-        picojson::array pathArr;
-        for (int locId : route.path) {
-            pathArr.push_back(picojson::value((double)locId));
+        picojson::array locationArr;
+        for (const auto& code : locationCodes) {
+            locationArr.push_back(picojson::value(code));
         }
-        response["path"] = picojson::value(pathArr);
+        response["locations"] = picojson::value(locationArr);
+
+        picojson::array legsArr;
+        for (const auto& leg : trip.legs) {
+            picojson::object legObj;
+            legObj["from_location_id"] = picojson::value((double)leg.from_location_id);
+            legObj["to_location_id"] = picojson::value((double)leg.to_location_id);
+            legObj["distance_meters"] = picojson::value((double)leg.distance_meters);
+            legObj["travel_time_minutes"] = picojson::value((double)leg.travel_time_minutes);
+            double legBufferMinutes = leg.distance_meters > 0 ? 2.0 : 0.0;
+            legObj["transition_buffer_minutes"] = picojson::value(legBufferMinutes);
+            legObj["total_trip_time_minutes"] = picojson::value((double)leg.travel_time_minutes + legBufferMinutes);
+
+            picojson::array pathArr;
+            for (int locId : leg.path) {
+                pathArr.push_back(picojson::value((double)locId));
+            }
+            legObj["path"] = picojson::value(pathArr);
+            legsArr.push_back(picojson::value(legObj));
+        }
+        response["legs"] = picojson::value(legsArr);
+
+        if (trip.legs.size() == 1) {
+            const auto& route = trip.legs.front();
+            response["from_location_id"] = picojson::value((double)route.from_location_id);
+            response["to_location_id"] = picojson::value((double)route.to_location_id);
+            picojson::array pathArr;
+            for (int locId : route.path) {
+                pathArr.push_back(picojson::value((double)locId));
+            }
+            response["path"] = picojson::value(pathArr);
+        }
 
         std::string jsonResponse = picojson::value(response).serialize();
         res.send(Http::Code::Ok, jsonResponse, MIME(Application, Json));
