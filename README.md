@@ -39,6 +39,16 @@ To also remove database volume data:
 docker compose down -v
 ```
 
+### Demo seed for Neon
+
+If you want a presentation-ready dataset in Neon, first apply the schema from `db-init/workingstudents.sql`, then load the demo data:
+
+```bash
+psql "$DATABASE_URL" -f db-init/demo_seed.sql
+```
+
+The demo seed resets the app tables and inserts a sample student, classes, shifts, and upcoming assignments that work well with the current calendar and assignments UI.
+
 ### Troubleshooting on Windows
 
 If you see an error like:
