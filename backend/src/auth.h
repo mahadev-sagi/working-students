@@ -18,6 +18,8 @@ struct UserProfileResult {
 };
 
 namespace Auth {
+    // Validate required JWT configuration before accepting requests. Throws on error.
+    void initialize();
     AuthResult loginFromJson(const std::string& body);
     UserProfileResult verifyBearerToken(const std::string& tokenString);
 }

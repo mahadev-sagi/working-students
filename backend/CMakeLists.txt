@@ -36,3 +36,12 @@ target_link_libraries(server
     bcrypt
     pistache
 )
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(auth_tests tests/auth_tests.cpp)
+    target_link_libraries(auth_tests crypto bcrypt)
+    add_test(NAME auth_security
+        COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:auth_tests>
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/auth_security.cmake)
+endif()

@@ -6,12 +6,32 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <chrono>
+#include <cstdlib>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <vector>
 
-static const std::string JWT_SECRET = "replace-this-with-secure-env-secret";
 static const std::string JWT_ISSUER = "productivity_app";
+
+static const std::string& jwtSecret() {
+    // Load once per process so signing and verification always use the same key.
+    // A restart is required after rotating JWT_SECRET.
+    static const std::string secret = [] {
+        const char* value = std::getenv("JWT_SECRET");
+        if (!value || std::string(value).size() < 32 ||
+            std::string(value) == "replace-this-with-secure-env-secret" ||
+            std::string(value).find_first_not_of(" \t\r\n") == std::string::npos) {
+            throw std::runtime_error("JWT_SECRET must be set to a new random secret of at least 32 bytes");
+        }
+        return std::string(value);
+    }();
+    return secret;
+}
+
+void Auth::initialize() {
+    (void)jwtSecret();
+}
 
 static std::string base64UrlEncode(const unsigned char* data, size_t len) {
     std::string out;
@@ -84,7 +104,7 @@ static std::string createJwtToken(int userId, const std::string& role) {
     std::string encodedHeader = base64UrlEncode(reinterpret_cast<const unsigned char*>(header.data()), header.size());
     std::string encodedPayload = base64UrlEncode(reinterpret_cast<const unsigned char*>(payload.data()), payload.size());
     std::string signingInput = encodedHeader + "." + encodedPayload;
-    std::string signature = hmacSha256(signingInput, JWT_SECRET);
+    std::string signature = hmacSha256(signingInput, jwtSecret());
     std::string encodedSignature = base64UrlEncode(reinterpret_cast<const unsigned char*>(signature.data()), signature.size());
 
     return signingInput + "." + encodedSignature;
@@ -134,19 +154,14 @@ AuthResult Auth::loginFromJson(const std::string& body) {
         return {false, "", "", "Password not set"};
     }
 
-    fprintf(stderr, "[DEBUG] Login attempt: email=%s password=%s\n", email.c_str(), password.c_str());
-    fprintf(stderr, "[DEBUG] Stored hash: %s\n", user.password_hash.c_str());
     int bcrypt_result = bcrypt_checkpw(password.c_str(), user.password_hash.c_str());
-    fprintf(stderr, "[DEBUG] bcrypt_checkpw result: %d\n", bcrypt_result);
     if (bcrypt_result != 0) {
         return {false, "", "", "Invalid credentials"};
     }
 
     try {
-        fprintf(stderr, "[DEBUG] Attempting JWT creation\n");
         auto token = createJwtToken(user.id, "student");
 
-        fprintf(stderr, "[DEBUG] JWT created successfully, length=%zu\n", token.size());
         return AuthResult{true, token, "student", ""};
     } catch (const std::exception& e) {
         fprintf(stderr, "[ERROR] JWT creation failed with std::exception: %s\n", e.what());
@@ -177,7 +192,7 @@ UserProfileResult Auth::verifyBearerToken(const std::string& tokenString) {
         std::string signaturePart = token.substr(dot2 + 1);
 
         std::string signingInput = headerPart + "." + payloadPart;
-        std::string signatureBinary = hmacSha256(signingInput, JWT_SECRET);
+        std::string signatureBinary = hmacSha256(signingInput, jwtSecret());
         std::string expectedSig = base64UrlEncode(
             reinterpret_cast<const unsigned char*>(signatureBinary.data()),
             signatureBinary.size()

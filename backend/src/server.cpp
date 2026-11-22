@@ -6,6 +6,8 @@
 #include "db.h"
 #include <picojson/picojson.h>
 #include <cctype>
+#include <cstdio>
+#include <exception>
 
 using namespace Pistache;
 using namespace Pistache::Rest;
@@ -83,6 +85,13 @@ static bool extractIdAndRoleFromProfileJson(const std::string& profileJson, int&
 
 
 int main() {
+    try {
+        Auth::initialize();
+    } catch (const std::exception& e) {
+        fprintf(stderr, "ERROR: Authentication configuration invalid: %s\n", e.what());
+        return 1;
+    }
+
     constexpr int port = 9080;
     const char* db_host    = std::getenv("DB_HOST")     ? std::getenv("DB_HOST")     : "db";
     const char* db_port    = std::getenv("DB_PORT")     ? std::getenv("DB_PORT")     : "5432";
@@ -305,12 +314,6 @@ int main() {
     Pistache::Rest::Routes::Post(router, "/login", [&](const Rest::Request req, Http::ResponseWriter res) {
         addCorsHeaders(res);
         auto body = req.body();
-        fprintf(stderr, "[DEBUG] Raw /login request body: %s\n", body.c_str());
-
-        std::string email = parseJsonField(body, "email");
-        std::string password = parseJsonField(body, "password");
-        fprintf(stderr, "[DEBUG] Parsed email: %s\n", email.c_str());
-        fprintf(stderr, "[DEBUG] Parsed password: %s\n", password.c_str());
 
         auto result = Auth::loginFromJson(body);
         if (!result.success) {

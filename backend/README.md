@@ -10,10 +10,15 @@ In the backend directory, use the provided Makefile to build the server:
 
 ```bash
 make
+export JWT_SECRET="$(openssl rand -hex 32)"
 ./build/server
 ```
 
 If you encounter missing dependencies, install them using your system's package manager (see Makefile for details and paths).
+
+`JWT_SECRET` is required at runtime. For a persistent deployment, supply a stable,
+random value through its environment/secrets manager; do not regenerate it on
+every startup. See the root README for rotation and compromised-token revocation.
 
 # Authentication API Endpoints
 
