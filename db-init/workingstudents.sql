@@ -22,8 +22,8 @@ CREATE TABLE students (
 
 INSERT INTO students (name, email, password_hash)
 VALUES
-('test', 'test@ufl.edu', '$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi'),  -- password is 'Test123' hashed with bcrypt
-('new_user', 'new_user@ufl.edu', NULL); -- example of student created by admin without setting password, can be updated later when student sets password
+('test', 'test@ufl.edu', '!'),  -- disabled; provision a private password out of band
+('new_user', 'new_user@ufl.edu', NULL); -- requires verified administrator provisioning
 
 
 -- ADMIN USERS
@@ -37,8 +37,8 @@ CREATE TABLE admin_users (
 
 INSERT INTO admin_users (name, email, password_hash)
 VALUES
-('Admin Test', 'admin_test@ufl.edu', '$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi'),
-('Course Admin', 'course_admin@ufl.edu', '$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi');
+('Admin Test', 'admin_test@ufl.edu', '!'),
+('Course Admin', 'course_admin@ufl.edu', '!');
 -- CLASSES
 
 CREATE TABLE classes (

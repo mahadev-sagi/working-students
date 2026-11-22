@@ -44,6 +44,7 @@ struct AdminRosterStudentRow {
     int id;
     std::string name;
     std::string email;
+    bool has_password = false;
 };
 
 struct AssignmentHoursByType {
@@ -126,7 +127,7 @@ namespace DB {
     std::optional<UserRow> findAdminById(int id);
     std::optional<UserRow> findUserByEmail(const std::string& email);
     std::optional<UserRow> findUserById(int id);
-    bool setUserPassword(const std::string& email, const std::string& password_hash);
+    bool setInitialStudentPassword(int adminId, const std::string& email, const std::string& password_hash);
     std::vector<AssignmentHoursByType> getAssignmentHoursByTypeForStudent(int studentId);
     int getTotalAssignmentHoursForStudent(int studentId);
     void shutdown();

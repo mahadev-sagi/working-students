@@ -38,6 +38,8 @@ target_link_libraries(server
 )
 
 include(CTest)
+add_executable(account_password tools/account_password.cpp)
+target_link_libraries(account_password pq bcrypt)
 if(BUILD_TESTING)
     add_executable(auth_tests tests/auth_tests.cpp)
     target_link_libraries(auth_tests crypto bcrypt)

@@ -7,7 +7,7 @@ BEGIN;
 -- Users
 --INSERT INTO admin_users (name, email, password_hash)
 --VALUES
- -- ('Neha Rani', 'neharani@ufl.edu', '$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi');
+ -- ('Neha Rani', 'neharani@ufl.edu', '!');
 
 INSERT INTO students (name, email, password_hash)
 VALUES

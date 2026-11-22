@@ -14,6 +14,12 @@
 
 static const std::string JWT_ISSUER = "productivity_app";
 
+static bool passwordEnabled(const std::string& hash) {
+    // This hash was published with its password in the seed SQL. Never trust it.
+    return !hash.empty() && hash != "!" &&
+        hash != "$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi";
+}
+
 static const std::string& jwtSecret() {
     // Load once per process so signing and verification always use the same key.
     // A restart is required after rotating JWT_SECRET.
@@ -129,6 +135,9 @@ AuthResult Auth::loginFromJson(const std::string& body) {
     auto adminOpt = DB::findAdminByEmail(email);
     if (adminOpt) {
         auto admin = *adminOpt;
+        if (!passwordEnabled(admin.password_hash)) {
+            return {false, "", "", "Invalid credentials"};
+        }
         int bcrypt_result = bcrypt_checkpw(password.c_str(), admin.password_hash.c_str());
         if (bcrypt_result != 0) {
             return {false, "", "", "Invalid credentials"};
@@ -150,8 +159,8 @@ AuthResult Auth::loginFromJson(const std::string& body) {
     }
 
     auto user = *userOpt;
-    if (user.password_hash.empty()) {
-        return {false, "", "", "Password not set"};
+    if (!passwordEnabled(user.password_hash)) {
+        return {false, "", "", "Invalid credentials"};
     }
 
     int bcrypt_result = bcrypt_checkpw(password.c_str(), user.password_hash.c_str());
@@ -241,11 +250,11 @@ UserProfileResult Auth::verifyBearerToken(const std::string& tokenString) {
         std::string role = roleIt->second.get<std::string>();
         int userId = std::stoi(subIt->second.get<std::string>());
         if (role == "admin") {
-            std::string email;
             auto adminOpt = DB::findAdminById(userId);
-            if (adminOpt) {
-                email = adminOpt->email;
+            if (!adminOpt || !passwordEnabled(adminOpt->password_hash)) {
+                return {false, {}, "Invalid credentials"};
             }
+            const auto& email = adminOpt->email;
 
             std::string userJson = std::string("{\"id\":") + std::to_string(userId) +
                 ",\"email\":\"" + email + "\",\"role\":\"admin\"}";
@@ -257,8 +266,8 @@ UserProfileResult Auth::verifyBearerToken(const std::string& tokenString) {
         }
 
         auto userOpt = DB::findUserById(userId);
-        if (!userOpt) {
-            return {false, {}, "User not found"};
+        if (!userOpt || !passwordEnabled(userOpt->password_hash)) {
+            return {false, {}, "Invalid credentials"};
         }
         auto user = *userOpt;
         std::string userJson = std::string("{\"id\":") + std::to_string(user.id) +

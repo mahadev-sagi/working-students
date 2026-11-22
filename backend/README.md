@@ -1,121 +1,55 @@
+# Authentication and account provisioning
 
+Set a stable random `JWT_SECRET` in the backend environment before starting.
+The root README documents JWT setup and rotation.
 
-# Authentication API Test Instructions
+## Public endpoints
 
-To test the authentication endpoints with the provided test user, follow these steps:
+- `POST /login`: existing accounts with enabled private passwords only.
+- `GET /me`: requires a valid bearer token and an enabled, existing account.
+- `POST /signup`: creates new student accounts only. It never activates or changes
+  an existing student, even if their password is unset, or an existing admin email.
+- `POST /lookup-email` and `POST /set-password`: retired; return 410 without
+  looking up an email or modifying a password.
 
-## Build and start the server
+## Initial student passwords
 
-In the backend directory, use the provided Makefile to build the server:
+Until expiring, single-use email invitations are implemented, an authenticated
+admin verifies the student identity and uses **Roster > Set initial password**.
+The password must contain 12 to 72 UTF-8 bytes and be shared privately. The API is
+`POST /admin/students/password` with JSON `email` and `password`. It requires an
+admin token and an enrollment in a class owned by that admin. One conditional
+SQL update prevents overwriting any existing or disabled password and handles
+concurrent activation safely. It does not reset existing passwords.
 
-```bash
-make
-export JWT_SECRET="$(openssl rand -hex 32)"
-./build/server
+## Published seed credentials and recovery
+
+Seed accounts start locked with password hash `!`. No usable default password is
+provided. For an existing database, apply `db-init/disable_published_credentials.sql`
+with `psql -v ON_ERROR_STOP=1`; do not rerun the destructive schema initializer.
+The migration preserves IDs, enrollments, classes, and ownership. Code also refuses
+the previously published seed hash for login and token verification.
+
+The operator-only `account_password` executable updates an existing admin or
+student using an email argument and a new password on stdin. It requires explicit
+`DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` environment settings and supports
+`DB_PORT` / `DB_SSLMODE`. Supply the password through a secure pipe from a password
+manager, not a command argument, terminal echo, or checked-in file. There is no
+public admin-password reset or bootstrap endpoint. Rotate JWT_SECRET and redeploy
+after recovery to revoke sessions issued under the previous password.
+
+## Verification
+
+Build the backend Docker image, run CTest, then run the HTTP/SQL regression suite:
+
+```sh
+docker build -t working-students-auth-fix backend
+docker run --rm --network none --entrypoint ctest working-students-auth-fix --test-dir /app/build --output-on-failure
+python backend/tests/account_security.py
 ```
 
-If you encounter missing dependencies, install them using your system's package manager (see Makefile for details and paths).
-
-`JWT_SECRET` is required at runtime. For a persistent deployment, supply a stable,
-random value through its environment/secrets manager; do not regenerate it on
-every startup. See the root README for rotation and compromised-token revocation.
-
-# Authentication API Endpoints
-
-## 1. Email Lookup
-
-Check if a user exists and if a password is set:
-
-```bash
-curl -X POST http://localhost:9080/lookup-email \
-   -H "Content-Type: application/json" \
-   -d '{"email":"test@example.com"}'
-```
-
-**Response:**
-- If email not found: `{ "exists": false }`
-- If found and password is set: `{ "exists": true, "hasPassword": true }`
-- If found and password is not set: `{ "exists": true, "hasPassword": false }`
-
-## 2. Set Password
-
-Set a password for a user who does not have one:
-
-```bash
-curl -X POST http://localhost:9080/set-password \
-   -H "Content-Type: application/json" \
-   -d '{"email":"test@example.com", "password":"NewPassword123"}'
-```
-
-**Response:**
-- 200 OK if successful, error if already set or not found.
-
-## 3. Login
-
-Login with email and password (only if password is set):
-
-```bash
-curl -X POST http://localhost:9080/login \
-   -H "Content-Type: application/json" \
-   -d '{"email":"test@example.com", "password":"Test123"}'
-```
-
-**Response:**
-- JSON with a `token` field if successful, error otherwise.
-
-## 4. Get Current User
-Use the token from login to get the current user's info:
-
-```bash
-curl -X GET http://localhost:9080/me \
-   -H "Authorization: Bearer TOKEN"
-```
-
-**Response:**
-- JSON with the user's email and id.
-
-## 5. First Sign-On Flow (Test User: new_user@example.com)
-
-All collaborators have access to the ws_app database profile (password: changeme).
-
-You can repeatedly test the first sign-on flow using the special test user new_user@example.com. After each test, reset the password_hash to NULL to allow another first sign-on. (password must be null to test setting new password, so we must clear the password after it is set in each test run)
-
-### a. Lookup Email (first sign-on)
-
-```bash
-curl -X POST http://localhost:9080/lookup-email \
-   -H "Content-Type: application/json" \
-   -d '{"email":"new_user@example.com"}'
-```
-
-### b. Set Password (first sign-on)
-
-```bash
-curl -X POST http://localhost:9080/set-password \
-   -H "Content-Type: application/json" \
-   -d '{"email":"new_user@example.com", "password":"YourNewPassword123"}'
-```
-
-### c. Login (after setting password)
-
-```bash
-curl -X POST http://localhost:9080/login \
-   -H "Content-Type: application/json" \
-   -d '{"email":"new_user@example.com", "password":"YourNewPassword123"}'
-```
-
-### d. Reset password_hash to NULL (for repeated testing)
-
-Run this SQL command as ws_app (password: changeme):
-
-```bash
-psql -U ws_app -h localhost -d workingstudents -c "UPDATE students SET password_hash = NULL WHERE email = 'new_user@example.com';"
-```
-
-This allows you to repeat the first sign-on flow as many times as needed.
-
----
-
+The HTTP suite provisions disposable local Docker containers. It never uses the
+root `.env` or connects to the production database.
 
 # Backend setup
 

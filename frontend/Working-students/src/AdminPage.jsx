@@ -54,6 +54,34 @@ function AdminPage({ user, token, onLogout }) {
   const [error, setError] = useState('');
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [studentForm, setStudentForm] = useState({ name: '', email: '' });
+  const [passwordStudent, setPasswordStudent] = useState(null);
+  const [initialPassword, setInitialPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  const closePasswordModal = () => {
+    setPasswordStudent(null);
+    setInitialPassword('');
+  };
+
+  const submitInitialPassword = async (event) => {
+    event.preventDefault();
+    setError('');
+    setSavingPassword(true);
+    try {
+      const res = await fetch(apiUrl('/admin/students/password'), {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ email: passwordStudent.email, password: initialPassword }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      closePasswordModal();
+      await loadRosterForClass(selectedClass.id);
+    } catch (err) {
+      setError(err.message || 'Could not set initial password');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
 
   const [classForm, setClassForm] = useState(getInitialClassForm());
   const [assignmentForm, setAssignmentForm] = useState(getInitialAssignmentForm());
@@ -540,6 +568,11 @@ function AdminPage({ user, token, onLogout }) {
             <div key={student.id} className="entity-card static-card">
               <div className="entity-card-title">{student.name || 'Unnamed student'}</div>
               <div className="entity-card-meta">{student.email}</div>
+              {student.has_password === false && (
+                <button type="button" onClick={() => { setInitialPassword(''); setPasswordStudent(student); }}>
+                  Set initial password
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -627,6 +660,25 @@ function AdminPage({ user, token, onLogout }) {
           {view === 'createAssignment' && renderAssignmentForm('create')}
           {view === 'editAssignment' && renderAssignmentForm('edit')}
         </>
+      )}
+
+      {passwordStudent && (
+        <div className="modal-backdrop">
+          <div className="modal-card" role="dialog" aria-modal="true" aria-label="Set initial password">
+            <h3>Set initial password</h3>
+            <p>{passwordStudent.email}</p>
+            <p>Verify the student's identity and share this password through a private channel.</p>
+            <form onSubmit={submitInitialPassword} className="admin-form-grid">
+              <input type="password" aria-label="Initial password" autoComplete="new-password" required
+                minLength={12} maxLength={72} value={initialPassword}
+                onChange={(event) => setInitialPassword(event.target.value)} />
+              <div className="minimal-actions split-actions">
+                <button type="button" disabled={savingPassword} onClick={closePasswordModal}>Cancel</button>
+                <button type="submit" disabled={savingPassword}>Set password</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {showAddStudentModal && (

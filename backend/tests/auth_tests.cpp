@@ -3,6 +3,7 @@
 #include <iostream>
 
 static std::string passwordHash;
+static bool adminExists = true;
 
 std::optional<UserRow> DB::findAdminByEmail(const std::string& email) {
     if (email == "admin@example.test") return UserRow{1, email, passwordHash};
@@ -13,7 +14,7 @@ std::optional<UserRow> DB::findUserByEmail(const std::string& email) {
     return std::nullopt;
 }
 std::optional<UserRow> DB::findAdminById(int id) {
-    if (id == 1) return UserRow{id, "admin@example.test", passwordHash};
+    if (id == 1 && adminExists) return UserRow{id, "admin@example.test", passwordHash};
     return std::nullopt;
 }
 std::optional<UserRow> DB::findUserById(int id) {
@@ -28,6 +29,11 @@ static void require(bool condition, const char* message) {
 int main(int argc, char** argv) {
     try {
         Auth::initialize();
+        char initialSalt[BCRYPT_HASHSIZE];
+        char initialHash[BCRYPT_HASHSIZE];
+        require(bcrypt_gensalt(4, initialSalt) == 0 &&
+                bcrypt_hashpw("test-password-marker", initialSalt, initialHash) == 0, "Test setup failed");
+        passwordHash = initialHash;
         require(argc >= 2, "Missing test mode");
         const std::string mode = argv[1];
         if (mode == "issue") {
@@ -61,6 +67,20 @@ int main(int argc, char** argv) {
             const auto forged = signingInput + "." + base64UrlEncode(
                 reinterpret_cast<const unsigned char*>(signature.data()), signature.size());
             require(!Auth::verifyBearerToken("Bearer " + forged).success, "Compromised key accepted");
+            const auto adminToken = createJwtToken(1, "admin");
+            const auto studentToken = createJwtToken(2, "student");
+            for (const auto& disabled : {"!", "", "$2b$12$ZJQCE.hYb2JxDIfd2sS2lORLYwelcUME00Ab77clhB/Gx5S5Z8yTi"}) {
+                passwordHash = disabled;
+                require(!Auth::verifyBearerToken("Bearer " + adminToken).success, "Disabled admin token accepted");
+                require(!Auth::verifyBearerToken("Bearer " + studentToken).success, "Disabled student token accepted");
+                for (const auto& email : {"admin@example.test", "student@example.test"}) {
+                    require(!Auth::loginFromJson(std::string("{\"email\":\"") + email +
+                        "\",\"password\":\"Test123\"}").success, "Disabled credentials accepted");
+                }
+            }
+            passwordHash = initialHash;
+            adminExists = false;
+            require(!Auth::verifyBearerToken("Bearer " + adminToken).success, "Deleted admin token accepted");
             std::cout << "Authentication regression checks passed\n";
         } else {
             throw std::runtime_error("Unknown test mode");

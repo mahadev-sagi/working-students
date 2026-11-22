@@ -53,6 +53,10 @@ bodies, credentials, hashes, or tokens.
 
 Services:
 
+Seed accounts have no usable default password. Public email lookup and password
+activation are disabled. See [backend account provisioning](backend/README.md)
+for private admin recovery and initial student passwords.
+
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:9080
 - Postgres: localhost:5432

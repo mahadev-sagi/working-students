@@ -92,14 +92,18 @@ std::optional<UserRow> DB::findUserByEmail(const std::string& email) {
     return row;
 }
 
-bool DB::setUserPassword(const std::string& email, const std::string& password_hash) {
+bool DB::setInitialStudentPassword(int adminId, const std::string& email, const std::string& password_hash) {
     if (!g_conn) return false;
-    const char* paramValues[2] = {password_hash.c_str(), email.c_str()};
+    const auto adminIdStr = std::to_string(adminId);
+    const char* paramValues[3] = {password_hash.c_str(), email.c_str(), adminIdStr.c_str()};
     PGresult* res = PQexecParams(g_conn,
-        "UPDATE students SET password_hash=$1 WHERE email=$2",
-        2, nullptr, paramValues, nullptr, nullptr, 0);
+        "UPDATE students s SET password_hash=$1 WHERE s.email=$2 "
+        "AND (s.password_hash IS NULL OR s.password_hash='') "
+        "AND EXISTS (SELECT 1 FROM enrollments e JOIN classes c ON c.id=e.class_id "
+        "WHERE e.student_id=s.id AND c.instructor_id=$3)",
+        3, nullptr, paramValues, nullptr, nullptr, 0);
     if (!res) return false;
-    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK && std::string(PQcmdTuples(res)) == "1";
     PQclear(res);
     return ok;
 }
@@ -983,7 +987,7 @@ std::vector<AdminRosterStudentRow> DB::getRosterForAdminClass(int adminId, int c
 
     PGresult* res = PQexecParams(
         g_conn,
-        "SELECT s.id, COALESCE(s.name, ''), s.email "
+        "SELECT s.id, COALESCE(s.name, ''), s.email, COALESCE(s.password_hash, '') <> '' "
         "FROM enrollments e "
         "JOIN students s ON s.id = e.student_id "
         "JOIN classes c ON c.id = e.class_id "
@@ -1004,6 +1008,7 @@ std::vector<AdminRosterStudentRow> DB::getRosterForAdminClass(int adminId, int c
         row.id = std::atoi(PQgetvalue(res, i, 0));
         row.name = PQgetvalue(res, i, 1);
         row.email = PQgetvalue(res, i, 2);
+        row.has_password = std::string(PQgetvalue(res, i, 3)) == "t";
         rows.push_back(row);
     }
 
